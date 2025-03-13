@@ -1,0 +1,38 @@
+<!DOCTYPE module SYSTEM "module.dtd">
+
+<module name="experiment1" dir="experiment1">
+  <doc>
+    <description>
+    Experimental config file for miantao to mess around in
+    </description>
+  </doc>
+  <settings>
+    <dl_settings>
+      <dl_setting var="oa_color_count_frac" min="0" step="0.01" max="0.5"/>
+    </dl_settings>
+  </settings>
+  <dep>
+    <depends>cv_detect_color_object</depends>
+  </dep>
+  <header>
+    <file name="experiment1.h"/>
+  </header>
+  <init fun="experiment1_init()"/>
+  <periodic fun="experiment1_periodic"/>
+  <makefile target="ap|nps">
+    <file name="experiment1.c"/>
+  </makefile>
+  <!-- TODO Specify header, init, periodic, makefile sections  -->
+</module>
+
+
+
+<!--<module name="mav_course_exercise">
+  <doc>
+    <description>
+    Exercise module for Autonomous Flight of MAV Course
+    </description>
+  </doc>
+  <depends>cv_detect_color_object</depends>
+</module>
+ -->
