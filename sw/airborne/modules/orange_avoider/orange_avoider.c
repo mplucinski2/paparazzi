@@ -10,11 +10,11 @@
  * Example on how to use the colours detected to avoid orange pole in the cyberzoo
  * This module is an example module for the course AE4317 Autonomous Flight of Micro Air Vehicles at the TU Delft.
  * This module is used in combination with a color filter (cv_detect_color_object) and the navigation mode of the autopilot.
- * The avoidance strategy is to simply count the total number of orange pixels. When above a certain percentage threshold,
- * (given by color_count_frac) we assume that there is an obstacle and we turn.
- *
- * The color filter settings are set using the cv_detect_color_object. This module can run multiple filters simultaneously
- * so you have to define which filter to use with the ORANGE_AVOIDER_VISUAL_DETECTION_ID setting.
+ * 
+ * Modified to use optical flow divergence instead of color detection.
+ * The avoidance strategy now uses the divergence calculated from the optical flow.
+ * When the divergence is above a certain threshold (given by oa_divergence_threshold),
+ * we assume that there is an obstacle in front of the drone and we turn.
  */
 
 #include "modules/orange_avoider/orange_avoider.h"
@@ -24,6 +24,11 @@
 #include "modules/core/abi.h"
 #include <time.h>
 #include <stdio.h>
+
+// Include optical flow modules
+#include "modules/computer_vision/opticflow/opticflow_calculator.h"
+#include "modules/computer_vision/opticflow/inter_thread_data.h"
+#include "modules/computer_vision/opticflow/size_divergence.h"
 
 #define NAV_C // needed to get the nav functions like Inside...
 #include "generated/flight_plan.h"
@@ -51,11 +56,15 @@ enum navigation_state_t {
   };
 
 // define settings
-float oa_color_count_frac = 0.18f;
+float oa_color_count_frac = 0.18f;  // kept for backwards compatibility
+
+// Set divergence threshold - use the defined value from airframe.h if available
+float oa_divergence_threshold = 0.02f; // default threshold for divergence detection
+
 
 // define and initialise global variables
 enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;
-int32_t color_count = 0;                // orange color count from color filter for obstacle detection
+float divergence = 0.0f;           // divergence value from optical flow
 int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead is safe.
 float heading_increment = 5.f;          // heading angle increment [deg]
 float maxDistance = 2.25;               // max waypoint displacement [m]
@@ -63,26 +72,30 @@ float maxDistance = 2.25;               // max waypoint displacement [m]
 const int16_t max_trajectory_confidence = 5; // number of consecutive negative object detections to be sure we are obstacle free
 
 /*
- * This next section defines an ABI messaging event (http://wiki.paparazziuav.org/wiki/ABI), necessary
- * any time data calculated in another module needs to be accessed. Including the file where this external
- * data is defined is not enough, since modules are executed parallel to each other, at different frequencies,
- * in different threads. The ABI event is triggered every time new data is sent out, and as such the function
- * defined in this file does not need to be explicitly called, only bound in the init function
+ * This next section defines an ABI messaging event for optical flow.
+ * The ABI event is triggered every time new optical flow data is available,
+ * and we bind to this event to get the divergence information.
  */
-#ifndef ORANGE_AVOIDER_VISUAL_DETECTION_ID
-#define ORANGE_AVOIDER_VISUAL_DETECTION_ID ABI_BROADCAST
+#ifndef ORANGE_AVOIDER_OPTICAL_FLOW_ID
+#define ORANGE_AVOIDER_OPTICAL_FLOW_ID ABI_BROADCAST
 #endif
-static abi_event color_detection_ev;
-static void color_detection_cb(uint8_t __attribute__((unused)) sender_id,
-                               int16_t __attribute__((unused)) pixel_x, int16_t __attribute__((unused)) pixel_y,
-                               int16_t __attribute__((unused)) pixel_width, int16_t __attribute__((unused)) pixel_height,
-                               int32_t quality, int16_t __attribute__((unused)) extra)
+static abi_event opticflow_ev;
+static void opticflow_cb(uint8_t sender_id __attribute__((unused)), 
+                        uint32_t stamp __attribute__((unused)),
+                        int flow_x __attribute__((unused)), 
+                        int flow_y __attribute__((unused)),
+                        int flow_der_x __attribute__((unused)), 
+                        int flow_der_y __attribute__((unused)),
+                        float quality __attribute__((unused)), 
+                        float size_divergence)
 {
-  color_count = quality;
+  // Get the divergence from the optical flow result
+  divergence = size_divergence;
+  VERBOSE_PRINT("Divergence value from optical flow: %f\n", divergence);
 }
 
 /*
- * Initialisation function, setting the colour filter, random seed and heading_increment
+ * Initialisation function, setting up ABI bindings for optical flow, random seed and heading_increment
  */
 void orange_avoider_init(void)
 {
@@ -90,12 +103,14 @@ void orange_avoider_init(void)
   srand(time(NULL));
   chooseRandomIncrementAvoidance();
 
-  // bind our colorfilter callbacks to receive the color filter outputs
-  AbiBindMsgVISUAL_DETECTION(ORANGE_AVOIDER_VISUAL_DETECTION_ID, &color_detection_ev, color_detection_cb);
+  // bind our opticflow callback to receive the opticflow results
+  AbiBindMsgOPTICAL_FLOW(ORANGE_AVOIDER_OPTICAL_FLOW_ID, &opticflow_ev, opticflow_cb);
+  
+  VERBOSE_PRINT("Orange Avoider initialized with divergence threshold: %f\n", oa_divergence_threshold);
 }
 
 /*
- * Function that checks it is safe to move forwards, and then moves a waypoint forward or changes the heading
+ * Function that checks if it is safe to move forwards, using optical flow divergence
  */
 void orange_avoider_periodic(void)
 {
@@ -104,13 +119,10 @@ void orange_avoider_periodic(void)
     return;
   }
 
-  // compute current color thresholds
-  int32_t color_count_threshold = oa_color_count_frac * front_camera.output_size.w * front_camera.output_size.h;
+  VERBOSE_PRINT("Divergence: %f  threshold: %f state: %d \n", divergence, oa_divergence_threshold, navigation_state);
 
-  VERBOSE_PRINT("Color_count: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
-
-  // update our safe confidence using color threshold
-  if(color_count < color_count_threshold){
+  // update our safe confidence using divergence threshold
+  if(divergence < oa_divergence_threshold){
     obstacle_free_confidence++;
   } else {
     obstacle_free_confidence -= 2;  // be more cautious with positive obstacle detections
