@@ -23,7 +23,7 @@
   />
   <aircraft
    name="bebop_experiment1"
-   ac_id="888"
+   ac_id="188"
    airframe="airframes/tudelft/bebop_course_experiment1.xml"
    radio="radios/dummy.xml"
    telemetry="telemetry/default_rotorcraft.xml"
