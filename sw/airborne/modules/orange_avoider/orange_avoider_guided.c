@@ -32,6 +32,8 @@
 #include "modules/core/abi.h"
 #include <stdio.h>
 #include <time.h>
+// #include "math/pprz_geodetic.h"  
+
 
 #define ORANGE_AVOIDER_VERBOSE TRUE
 
@@ -41,6 +43,7 @@
 #else
 #define VERBOSE_PRINT(...)
 #endif
+#define FIXED_ROTATION_ANGLE RadOfDeg(10.f)  // Rotate 30 degrees
 
 uint8_t chooseRandomIncrementAvoidance(void);
 
@@ -65,6 +68,7 @@ int32_t floor_count = 0;                // green color count from color filter f
 int32_t floor_centroid = 0;             // floor detector centroid in y direction (along the horizon)
 float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
 int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead if safe.
+float target_heading = 0;  // Define global target heading
 
 const int16_t max_trajectory_confidence = 5;  // number of consecutive negative object detections to be sure we are obstacle free
 
@@ -142,7 +146,8 @@ void orange_avoider_guided_periodic(void)
   Bound(obstacle_free_confidence, 0, max_trajectory_confidence);
 
   float speed_sp = fminf(oag_max_speed, 0.2f * obstacle_free_confidence);
-
+  float current_heading = stateGetNedToBodyEulers_f()->psi;
+  
   switch (navigation_state){
     case SAFE:
       if (floor_count < floor_count_threshold || fabsf(floor_centroid_frac) > 0.12){
@@ -157,20 +162,21 @@ void orange_avoider_guided_periodic(void)
     case OBSTACLE_FOUND:
       // stop
       guidance_h_set_body_vel(0, 0);
-
-      // randomly select new search direction
-      chooseRandomIncrementAvoidance();
-
+    
+      // Randomly select new search direction
+      float rotation_sign = (rand() % 2 == 0) ? 1.f : -1.f;  // Random CW or CCW
+      target_heading = current_heading + rotation_sign * FIXED_ROTATION_ANGLE;
+    
       navigation_state = SEARCH_FOR_SAFE_HEADING;
-
       break;
     case SEARCH_FOR_SAFE_HEADING:
-      guidance_h_set_heading_rate(avoidance_heading_direction * oag_heading_rate);
-
-      // make sure we have a couple of good readings before declaring the way safe
-      if (obstacle_free_confidence >= 2){
-        guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
+      float angle_difference = fmodf(target_heading - current_heading + M_PI, 2 * M_PI) - M_PI;
+      if (fabsf(angle_difference) < RadOfDeg(2.0)) {  
+        // Stop when close
+        guidance_h_set_heading(target_heading);
         navigation_state = SAFE;
+      } else {
+          guidance_h_set_heading_rate(avoidance_heading_direction * oag_heading_rate);
       }
       break;
     case OUT_OF_BOUNDS:
