@@ -30,5 +30,6 @@ The module binds to the OPTICAL_FLOW ABI message to receive divergence informati
   <periodic fun="orange_avoider_periodic()" freq="4"/>
   <makefile target="ap|nps">
     <file name="orange_avoider.c"/>
+    <define name="USE_TELEMETRY"/>
   </makefile>
 </module>

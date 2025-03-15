@@ -24,6 +24,7 @@
 #include "modules/core/abi.h"
 #include <time.h>
 #include <stdio.h>
+#include "modules/datalink/telemetry.h"
 
 // Include optical flow modules
 #include "modules/computer_vision/opticflow/opticflow_calculator.h"
@@ -47,6 +48,7 @@ static uint8_t calculateForwards(struct EnuCoor_i *new_coor, float distanceMeter
 static uint8_t moveWaypoint(uint8_t waypoint, struct EnuCoor_i *new_coor);
 static uint8_t increase_nav_heading(float incrementDegrees);
 static uint8_t chooseRandomIncrementAvoidance(void);
+static void send_obstacle_confidence(struct transport_tx *trans, struct link_device *dev);
 
 enum navigation_state_t {
   SAFE,
@@ -106,7 +108,23 @@ void orange_avoider_init(void)
   // bind our opticflow callback to receive the opticflow results
   AbiBindMsgOPTICAL_FLOW(ORANGE_AVOIDER_OPTICAL_FLOW_ID, &opticflow_ev, opticflow_cb);
   
+  // Register telemetry for obstacle_free_confidence
+  register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_OBSTACLE_CONFIDENCE, send_obstacle_confidence);
+  
   VERBOSE_PRINT("Orange Avoider initialized with divergence threshold: %f\n", oa_divergence_threshold);
+}
+
+/**
+ * Send telemetry data for obstacle confidence
+ */
+static void send_obstacle_confidence(struct transport_tx *trans, struct link_device *dev)
+{
+  uint8_t nav_state = (uint8_t)navigation_state;
+  pprz_msg_send_OBSTACLE_CONFIDENCE(trans, dev, AC_ID, 
+                                   &obstacle_free_confidence,
+                                   &divergence,
+                                   &oa_divergence_threshold,
+                                   &nav_state);
 }
 
 /*
