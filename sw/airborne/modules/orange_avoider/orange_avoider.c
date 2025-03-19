@@ -35,8 +35,8 @@
 #include "generated/flight_plan.h"
 
 #define ORANGE_AVOIDER_VERBOSE TRUE
-// Set the print frequency - only print once every N calls to orange_avoider_periodic
-#define PRINT_FREQUENCY 20
+// Set a less frequent interval for divergence printing to reduce output
+#define DIVERGENCE_PRINT_FREQUENCY 20
 
 #define PRINT(string,...) fprintf(stderr, "[orange_avoider->%s()] " string,__FUNCTION__ , ##__VA_ARGS__)
 #if ORANGE_AVOIDER_VERBOSE
@@ -45,7 +45,11 @@
 #define VERBOSE_PRINT(...)
 #endif
 
-// Add a message counter for controlling print frequency
+// Define functions that only print divergence-related info or suppress prints
+#define DIVERGENCE_PRINT(string,...) VERBOSE_PRINT(string, ##__VA_ARGS__)
+#define SILENT_PRINT(...) do {} while(0)
+
+// Message counter for controlling print frequency
 static uint16_t msg_counter = 0;
 
 static uint8_t moveWaypointForward(uint8_t waypoint, float distanceMeters);
@@ -53,11 +57,10 @@ static uint8_t calculateForwards(struct EnuCoor_i *new_coor, float distanceMeter
 static uint8_t moveWaypoint(uint8_t waypoint, struct EnuCoor_i *new_coor);
 static uint8_t increase_nav_heading(float incrementDegrees);
 static void send_obstacle_confidence(struct transport_tx *trans, struct link_device *dev);
-
-// Add back the random heading increment variable and function
-float heading_increment = 5.f;          // heading angle increment [deg]
-
 static uint8_t chooseRandomIncrementAvoidance(void);
+
+// Add heading increment variable
+float heading_increment = 5.f;          // heading angle increment [deg]
 
 enum navigation_state_t {
   SAFE,
@@ -71,17 +74,15 @@ enum navigation_state_t {
 float oa_color_count_frac = 0.18f;  // kept for backwards compatibility
 
 // Set divergence threshold - use the defined value from airframe.h if available
-float oa_divergence_threshold = 0.02f; // default threshold for divergence detection
+float oa_divergence_threshold = 0.01f; // default threshold for divergence detection
 
 // define and initialise global variables
 enum navigation_state_t navigation_state = TURNING_OBSTACLE;
 float divergence = 0.0f;           // divergence value from optical flow
-int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead is safe.
-float maxDistance = 2.25;               // max waypoint displacement [m]
-float target_heading;                   // Target heading after turning 90 degrees
-bool turning_complete = false;          // Flag to track if turning is complete
+float maxDistance = 2.25;          // max waypoint displacement [m]
+float target_heading;              // Target heading after turning 90 degrees
+bool turning_complete = false;     // Flag to track if turning is complete
 
-const int16_t max_trajectory_confidence = 5; // number of consecutive negative object detections to be sure we are obstacle free
 const float HEADING_TOLERANCE = RadOfDeg(3.0f); // Tolerance for heading alignment (3 degrees)
 
 /*
@@ -93,6 +94,7 @@ const float HEADING_TOLERANCE = RadOfDeg(3.0f); // Tolerance for heading alignme
 #define ORANGE_AVOIDER_OPTICAL_FLOW_ID ABI_BROADCAST
 #endif
 static abi_event opticflow_ev;
+
 static void opticflow_cb(uint8_t sender_id __attribute__((unused)), 
                         uint32_t stamp __attribute__((unused)),
                         int flow_x __attribute__((unused)), 
@@ -106,14 +108,13 @@ static void opticflow_cb(uint8_t sender_id __attribute__((unused)),
   if (navigation_state == SAFE) {
     divergence = size_divergence;
     
-    // Print only when divergence changes significantly or every PRINT_FREQUENCY times
-    static float last_printed_divergence = 0;
+    // Print divergence values at the specified frequency
     static uint8_t flow_msg_counter = 0;
-    
     flow_msg_counter++;
-    if (flow_msg_counter % PRINT_FREQUENCY == 0 || fabsf(last_printed_divergence - divergence) > 0.01) {
-      VERBOSE_PRINT("Divergence value from optical flow: %f\n", divergence);
-      last_printed_divergence = divergence;
+    
+    if (flow_msg_counter % DIVERGENCE_PRINT_FREQUENCY == 0) {
+      // Only print every DIVERGENCE_PRINT_FREQUENCY calls
+      DIVERGENCE_PRINT("Divergence value from optical flow: %f\n", divergence);
     }
   }
 }
@@ -133,27 +134,31 @@ void orange_avoider_init(void)
   // Register telemetry for obstacle_free_confidence
   register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_OBSTACLE_CONFIDENCE, send_obstacle_confidence);
   
-  VERBOSE_PRINT("Orange Avoider initialized with divergence threshold: %f\n", oa_divergence_threshold);
+  DIVERGENCE_PRINT("Orange Avoider initialized with divergence threshold: %f\n", oa_divergence_threshold);
 }
 
 /**
- * Send telemetry data for obstacle confidence
+ * Send telemetry data for obstacle detection
  * This function is called by the telemetry module, but we'll only send data periodically
  */
 static void send_obstacle_confidence(struct transport_tx *trans, struct link_device *dev)
 {
-  // Only send telemetry data periodically to reduce traffic
+  // Send telemetry more frequently to match our divergence print frequency
   static uint8_t telemetry_counter = 0;
   telemetry_counter++;
   
-  if (telemetry_counter % PRINT_FREQUENCY == 0 || 
+  // Send more frequently (every DIVERGENCE_PRINT_FREQUENCY) or during important events
+  if (telemetry_counter % DIVERGENCE_PRINT_FREQUENCY == 0 || 
       navigation_state == TURNING_OBSTACLE || 
       navigation_state == OBSTACLE_FOUND || 
       navigation_state == TURNING_BOUNDARY || 
       navigation_state == OUT_OF_BOUNDS) {
+    // Create a dummy confidence value of 1/0 based on divergence vs threshold
+    // to maintain compatibility with existing telemetry message
+    int16_t obstacle_detected = (divergence > oa_divergence_threshold) ? 0 : 1;
     uint8_t nav_state = (uint8_t)navigation_state;
     pprz_msg_send_OBSTACLE_CONFIDENCE(trans, dev, AC_ID, 
-                                    &obstacle_free_confidence,
+                                    &obstacle_detected,
                                     &divergence,
                                     &oa_divergence_threshold,
                                     &nav_state);
@@ -187,36 +192,27 @@ void orange_avoider_periodic(void)
     return;
   }
 
-  // Increment counter and check if we should print this iteration
+  // Increment counter
   msg_counter++;
-  bool should_print = (msg_counter % PRINT_FREQUENCY == 0);
-
-  // Only print the status message periodically
-  if (should_print) {
-    VERBOSE_PRINT("Divergence: %f  threshold: %f state: %d \n", divergence, oa_divergence_threshold, navigation_state);
+  
+  // Print divergence information at the specified frequency
+  if (msg_counter % DIVERGENCE_PRINT_FREQUENCY == 0) {
+    DIVERGENCE_PRINT("Divergence: %f  threshold: %f state: %d\n", 
+               divergence, oa_divergence_threshold, navigation_state);
   }
 
-  // Update confidence based on divergence threshold, but only in SAFE state
-  if (navigation_state == SAFE) {
-    if (divergence < oa_divergence_threshold) {
-      obstacle_free_confidence++;
-    } else {
-      obstacle_free_confidence -= 2;  // be more cautious with positive obstacle detections
-    }
-
-    // bound obstacle_free_confidence
-    Bound(obstacle_free_confidence, 0, max_trajectory_confidence);
-  }
-
-  float moveDistance = fminf(maxDistance, 0.2f * obstacle_free_confidence);
+  // Calculate move distance - fixed distance
+  float moveDistance = 1.0f;  // Use a reasonable constant distance
 
   switch (navigation_state){
     case SAFE:
       // Move waypoint forward
       moveWaypointForward(WP_TRAJECTORY, 1.5f * moveDistance);
+      
       if (!InsideObstacleZone(WaypointX(WP_TRAJECTORY),WaypointY(WP_TRAJECTORY))){
         navigation_state = OUT_OF_BOUNDS;
-      } else if (obstacle_free_confidence == 0){
+      } else if (divergence > oa_divergence_threshold){
+        // Direct threshold crossing detection - exactly as described in the guide
         navigation_state = OBSTACLE_FOUND;
       } else {
         moveWaypointForward(WP_GOAL, moveDistance);
@@ -232,7 +228,7 @@ void orange_avoider_periodic(void)
 
       // Set target heading 90 degrees clockwise from current heading
       float current_heading = stateGetNedToBodyEulers_f()->psi;
-      target_heading = current_heading - RadOfDeg(135.0f);  // Clockwise is negative in Paparazzi
+      target_heading = current_heading - RadOfDeg(90.0f);  // Clockwise is negative in Paparazzi
       
       // Normalize heading to [-pi, pi]
       FLOAT_ANGLE_NORMALIZE(target_heading);
@@ -240,8 +236,9 @@ void orange_avoider_periodic(void)
       // Set the new heading
       nav.heading = target_heading;
       
-      // Always print state changes as they're important and rare
-      VERBOSE_PRINT("Obstacle detected! Turning 90 degrees clockwise to heading %f\n", DegOfRad(target_heading));
+      // Only print divergence and critical state changes
+      DIVERGENCE_PRINT("CRITICAL: Obstacle detected! Divergence: %f Threshold: %f\n", 
+                      divergence, oa_divergence_threshold);
       
       // Reset turning flag
       turning_complete = false;
@@ -255,21 +252,15 @@ void orange_avoider_periodic(void)
       if (is_heading_aligned()) {
         if (!turning_complete) {
           turning_complete = true;
-          // Always print important state changes
-          VERBOSE_PRINT("Turn complete after obstacle, heading: %f\n", DegOfRad(stateGetNedToBodyEulers_f()->psi));
-          
-          // Reset obstacle_free_confidence for the new direction
-          obstacle_free_confidence = 2;  // Start with some confidence in the new direction
+          // Print only critical state changes
+          DIVERGENCE_PRINT("CRITICAL: Turn complete after obstacle, new heading: %f\n", 
+                          DegOfRad(stateGetNedToBodyEulers_f()->psi));
           
           // Explicitly move waypoints in the new direction to get the drone moving
-          // Use larger distances to ensure the drone moves promptly in the new direction
           float initialMoveDistance = 1.5f;  // Use a reasonable initial distance
           moveWaypointForward(WP_TRAJECTORY, 2.0f * initialMoveDistance);
           moveWaypointForward(WP_GOAL, initialMoveDistance);
           moveWaypointForward(WP_RETREAT, -0.5f * initialMoveDistance);
-          
-          // Force an immediate update of the waypoints
-          VERBOSE_PRINT("Immediately updating waypoints in the new direction\n");
         }
         
         // Return to SAFE state once the turn is complete
@@ -286,11 +277,8 @@ void orange_avoider_periodic(void)
       if (InsideObstacleZone(WaypointX(WP_TRAJECTORY),WaypointY(WP_TRAJECTORY))){
         // Add extra heading increment to point back into arena
         increase_nav_heading(heading_increment);
-
-        // Reset safe counter
-        obstacle_free_confidence = 0;
         
-        VERBOSE_PRINT("Back inside boundary, heading: %f\n", DegOfRad(nav.heading));
+        SILENT_PRINT("Back inside boundary, heading: %f\n", DegOfRad(nav.heading));
         
         // Transition to TURNING_BOUNDARY
         navigation_state = TURNING_BOUNDARY;
@@ -304,7 +292,7 @@ void orange_avoider_periodic(void)
       moveWaypointForward(WP_GOAL, boundaryMoveDistance);
       moveWaypointForward(WP_RETREAT, -0.5f * boundaryMoveDistance);
       
-      VERBOSE_PRINT("Moving waypoints after boundary turn, heading: %f\n", DegOfRad(nav.heading));
+      SILENT_PRINT("Moving waypoints after boundary turn, heading: %f\n", DegOfRad(nav.heading));
       
       // Return to SAFE state
       navigation_state = SAFE;
@@ -328,10 +316,8 @@ uint8_t increase_nav_heading(float incrementDegrees)
   // set heading, declared in firmwares/rotorcraft/navigation.h
   nav.heading = new_heading;
 
-  // Only print heading changes during significant events or with reasonable frequency
-  if (navigation_state == TURNING_OBSTACLE || navigation_state == TURNING_BOUNDARY || navigation_state == OUT_OF_BOUNDS || (msg_counter % PRINT_FREQUENCY == 0)) {
-    VERBOSE_PRINT("Increasing heading to %f\n", DegOfRad(new_heading));
-  }
+  // Suppress prints
+  SILENT_PRINT("Increasing heading to %f\n", DegOfRad(new_heading));
   return false;
 }
 
@@ -358,12 +344,10 @@ uint8_t calculateForwards(struct EnuCoor_i *new_coor, float distanceMeters)
   new_coor->x = stateGetPositionEnu_i()->x + POS_BFP_OF_REAL(sinf(heading) * (distanceMeters));
   new_coor->y = stateGetPositionEnu_i()->y + POS_BFP_OF_REAL(cosf(heading) * (distanceMeters));
   
-  // Only print during significant events or when should_print is true
-  if (navigation_state == TURNING_OBSTACLE || navigation_state == OBSTACLE_FOUND || navigation_state == TURNING_BOUNDARY || navigation_state == OUT_OF_BOUNDS || (msg_counter % PRINT_FREQUENCY == 0)) {
-    VERBOSE_PRINT("Calculated %f m forward position. x: %f  y: %f based on pos(%f, %f) and heading(%f)\n", distanceMeters,	
-                POS_FLOAT_OF_BFP(new_coor->x), POS_FLOAT_OF_BFP(new_coor->y),
-                stateGetPositionEnu_f()->x, stateGetPositionEnu_f()->y, DegOfRad(heading));
-  }
+  // Suppress prints
+  SILENT_PRINT("Calculated %f m forward position. x: %f  y: %f based on pos(%f, %f) and heading(%f)\n", distanceMeters,	
+              POS_FLOAT_OF_BFP(new_coor->x), POS_FLOAT_OF_BFP(new_coor->y),
+              stateGetPositionEnu_f()->x, stateGetPositionEnu_f()->y, DegOfRad(heading));
   return false;
 }
 
@@ -372,11 +356,9 @@ uint8_t calculateForwards(struct EnuCoor_i *new_coor, float distanceMeters)
  */
 uint8_t moveWaypoint(uint8_t waypoint, struct EnuCoor_i *new_coor)
 {
-  // Only print during significant events or when should_print is true
-  if (navigation_state == TURNING_OBSTACLE || navigation_state == OBSTACLE_FOUND || navigation_state == TURNING_BOUNDARY || navigation_state == OUT_OF_BOUNDS || (msg_counter % PRINT_FREQUENCY == 0)) {
-    VERBOSE_PRINT("Moving waypoint %d to x:%f y:%f\n", waypoint, POS_FLOAT_OF_BFP(new_coor->x),
-                  POS_FLOAT_OF_BFP(new_coor->y));
-  }
+  // Suppress prints
+  SILENT_PRINT("Moving waypoint %d to x:%f y:%f\n", waypoint, POS_FLOAT_OF_BFP(new_coor->x),
+                POS_FLOAT_OF_BFP(new_coor->y));
   waypoint_move_xy_i(waypoint, new_coor->x, new_coor->y);
   return false;
 }
@@ -389,14 +371,10 @@ uint8_t chooseRandomIncrementAvoidance(void)
   // Randomly choose CW or CCW avoiding direction
   if (rand() % 2 == 0) {
     heading_increment = 5.f;
-    if (msg_counter % PRINT_FREQUENCY == 0) {
-      VERBOSE_PRINT("Set avoidance increment to: %f\n", heading_increment);
-    }
+    SILENT_PRINT("Set avoidance increment to: %f\n", heading_increment);
   } else {
     heading_increment = -5.f;
-    if (msg_counter % PRINT_FREQUENCY == 0) {
-      VERBOSE_PRINT("Set avoidance increment to: %f\n", heading_increment);
-    }
+    SILENT_PRINT("Set avoidance increment to: %f\n", heading_increment);
   }
   return false;
 }

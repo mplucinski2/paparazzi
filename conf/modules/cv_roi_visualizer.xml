@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!DOCTYPE module SYSTEM "module.dtd">
+
+<module name="cv_roi_visualizer" dir="computer_vision">
+  <doc>
+    <description>
+      Visualize the Region of Interest used by optical flow calculations
+    </description>
+  </doc>
+
+  <header>
+    <file name="cv_roi_visualizer.h"/>
+  </header>
+
+  <init fun="roi_visualizer_init()"/>
+
+  <makefile>
+    <file name="cv_roi_visualizer.c"/>
+  </makefile>
+</module> 
