@@ -81,7 +81,7 @@
     </module>
     
     <!-- Orange avoider now using optical flow instead of color detection -->
-    <module name="orange_avoider">
+    <module name="experiment1">
       <define name="ORANGE_AVOIDER_OPTICAL_FLOW_ID" value="ABI_BROADCAST"/>
       <define name="ORANGE_AVOIDER_VERBOSE" value="TRUE"/>
       <define name="OA_DIVERGENCE_THRESHOLD" value="0.05"/>

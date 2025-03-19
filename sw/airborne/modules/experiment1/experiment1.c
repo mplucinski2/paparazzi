@@ -17,7 +17,7 @@
  * we assume that there is an obstacle in front of the drone and we turn.
  */
 
- #include "modules/experiment1/experiment1.h"
+ #include "modules/orange_avoider/orange_avoider.h"
  #include "firmwares/rotorcraft/navigation.h"
  #include "generated/airframe.h"
  #include "state.h"
@@ -55,32 +55,22 @@
    OUT_OF_BOUNDS
    };
  
-struct _setting {
-  float oa_color_count_frac = 0.18f;  // kept for backwards compatibility
+ // define settings
+ float oa_color_count_frac = 0.18f;  // kept for backwards compatibility
  
-  // Set divergence threshold - use the defined value from airframe.h if available
-  float oa_divergence_threshold = 0.02f; // default threshold for divergence detection
-  
-
-  const int16_t max_trajectory_confidence = 5; // number of consecutive negative object detections to be sure we are obstacle free
-
-  float maxDistance = 2.25;               // max waypoint displacement [m]
-    
-} Setting;
-
-struct _state {
-  // define and initialise global variables
-  enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;
-  float divergence = 0.0f;           // divergence value from optical flow
-  int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead is safe.
-  float heading_increment = 5.f;          // heading angle increment [deg]
-
-
-} State;
-
-
-static Setting setting;
-static State state;
+ // Set divergence threshold - use the defined value from airframe.h if available
+ float oa_divergence_threshold = 0.02f; // default threshold for divergence detection
+ 
+ 
+ // define and initialise global variables
+ enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;
+ float divergence = 0.0f;           // divergence value from optical flow
+ int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead is safe.
+ float heading_increment = 5.f;          // heading angle increment [deg]
+ float maxDistance = 2.25;               // max waypoint displacement [m]
+ 
+ const int16_t max_trajectory_confidence = 5; // number of consecutive negative object detections to be sure we are obstacle free
+ 
  /*
   * This next section defines an ABI messaging event for optical flow.
   * The ABI event is triggered every time new optical flow data is available,
@@ -116,35 +106,34 @@ static State state;
    // bind our opticflow callback to receive the opticflow results
    AbiBindMsgOPTICAL_FLOW(ORANGE_AVOIDER_OPTICAL_FLOW_ID, &opticflow_ev, opticflow_cb);
    
-   VERBOSE_PRINT("Orange Avoider initialized with divergence threshold: %f\n", setting.oa_divergence_threshold);
+   VERBOSE_PRINT("Orange Avoider initialized with divergence threshold: %f\n", oa_divergence_threshold);
  }
  
  /*
   * Function that checks if it is safe to move forwards, using optical flow divergence
   */
- void experimnet1_periodic(void)
+ void experiment1_periodic(void)
  {
    // only evaluate our state machine if we are flying
    if(!autopilot_in_flight()){
      return;
    }
- 
-   VERBOSE_PRINT("Divergence: %f  threshold: %f state: %d \n", state.divergence, state.oa_divergence_threshold, state.navigation_state);
-   VERBOSE_PRINT("curr: %d  max: %d  ", state.obstacle_free_confidence, setting.max_trajectory_confidence);
+   VERBOSE_PRINT("I am experiment 1!!!");
+   VERBOSE_PRINT("Divergence: %f  threshold: %f state: %d \n", divergence, oa_divergence_threshold, navigation_state);
  
    // update our safe confidence using divergence threshold
-   if(state.divergence < setting.oa_divergence_threshold){
-     state.obstacle_free_confidence++;
+   if(divergence < oa_divergence_threshold){
+     obstacle_free_confidence++;
    } else {
-     state.obstacle_free_confidence -= 2;  // be more cautious with positive obstacle detections
+     obstacle_free_confidence -= 2;  // be more cautious with positive obstacle detections
    }
  
    // bound obstacle_free_confidence
-   Bound(state.obstacle_free_confidence, 0, setting.max_trajectory_confidence);
+   Bound(obstacle_free_confidence, 0, max_trajectory_confidence);
  
-   float moveDistance = fminf(setting.maxDistance, 0.2f * state.obstacle_free_confidence);
+   float moveDistance = fminf(maxDistance, 0.2f * obstacle_free_confidence);
  
-   switch (state.navigation_state){
+   switch (navigation_state){
      case SAFE:
        // Move waypoint forward
        moveWaypointForward(WP_TRAJECTORY, 1.5f * moveDistance);
@@ -167,31 +156,31 @@ static State state;
        // randomly select new search direction
        chooseRandomIncrementAvoidance();
  
-       state.navigation_state = SEARCH_FOR_SAFE_HEADING;
+       navigation_state = SEARCH_FOR_SAFE_HEADING;
  
        break;
      case SEARCH_FOR_SAFE_HEADING:
        increase_nav_heading(heading_increment);
  
        // make sure we have a couple of good readings before declaring the way safe
-       if (state.obstacle_free_confidence >= 2){
-        state.navigation_state = SAFE;
+       if (obstacle_free_confidence >= 2){
+         navigation_state = SAFE;
        }
        break;
      case OUT_OF_BOUNDS:
-       increase_nav_heading(state.heading_increment);
+       increase_nav_heading(heading_increment);
        moveWaypointForward(WP_TRAJECTORY, 1.5f);
        moveWaypointForward(WP_RETREAT, -1.0f);
  
        if (InsideObstacleZone(WaypointX(WP_TRAJECTORY),WaypointY(WP_TRAJECTORY))){
          // add offset to head back into arena
-         increase_nav_heading(state.heading_increment);
+         increase_nav_heading(heading_increment);
  
          // reset safe counter
-         state.obstacle_free_confidence = 0;
+         obstacle_free_confidence = 0;
  
          // ensure direction is safe before continuing
-         state.navigation_state = SEARCH_FOR_SAFE_HEADING;
+         navigation_state = SEARCH_FOR_SAFE_HEADING;
        }
        break;
      default:
@@ -262,11 +251,11 @@ static State state;
  {
    // Randomly choose CW or CCW avoiding direction
    if (rand() % 2 == 0) {
-     state.heading_increment = 5.f;
-     VERBOSE_PRINT("Set avoidance increment to: %f\n", state.heading_increment);
+     heading_increment = 5.f;
+     VERBOSE_PRINT("Set avoidance increment to: %f\n", heading_increment);
    } else {
-     state.heading_increment = -5.f;
-     VERBOSE_PRINT("Set avoidance increment to: %f\n", state.heading_increment);
+     heading_increment = -5.f;
+     VERBOSE_PRINT("Set avoidance increment to: %f\n", heading_increment);
    }
    return false;
  }
