@@ -32,6 +32,7 @@
       <message name="VISION_POSITION_ESTIMATE" period="0.1"/>
       <message name="DIVERGENCE"               period="0.05"/>
       <message name="DRAGSPEED"                period="0.02"/>
+      <message name="OBSTACLE_CONFIDENCE"      period="0.1"/>
       <message name="LOGGER_STATUS"            period="5.1"/>
       <message name="LIDAR"                    period="1.2"/>
       <message name="INS_EKF2"                 period=".25"/>
