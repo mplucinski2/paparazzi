@@ -49,14 +49,22 @@ enum navigation_state_t {
   OBSTACLE_FOUND,
   SEARCH_FOR_SAFE_HEADING,
   OUT_OF_BOUNDS,
+  CLOSE_TO_EDGE,
   REENTER_ARENA
 };
 
 // define settings
 float oag_color_count_frac = 0.18f;       // obstacle detection threshold as a fraction of total of image
-float oag_floor_count_frac = 0.05f;       // floor detection threshold as a fraction of total of image
+float oag_floor_count_frac = 0.03f;       // floor detection threshold as a fraction of total of image
 float oag_max_speed = 0.5f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
+
+#define CIRCLE_FORWARD_SPEED  0.5f   // Conservative speed for safety
+#define DT (1.0/4.0f) // 1/Frequency Match the freq value with video_capture in bebop_course_orangeavoid_guided.xml
+#define circle_angular_rate (0.5/CIRCLE_FORWARD_SPEED) // Circle radius(m)/Circle forward speed(m/s)
+
+static float circle_current_heading;
+static bool circle_initialized = false; // Ensure one-time initialization
 
 // define and initialise global variables
 enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;   // current state in state machine
@@ -145,10 +153,12 @@ void orange_avoider_guided_periodic(void)
 
   switch (navigation_state){
     case SAFE:
-      if (floor_count < floor_count_threshold || fabsf(floor_centroid_frac) > 0.12){
-        navigation_state = OUT_OF_BOUNDS;
-      } else if (obstacle_free_confidence == 0){
+      if (obstacle_free_confidence == 0){
         navigation_state = OBSTACLE_FOUND;
+      } else if ((floor_count < floor_count_threshold) || (fabsf(floor_centroid_frac) > 0.2)){
+        navigation_state = CLOSE_TO_EDGE;
+      } else if (floor_count < floor_count_threshold * 0.5){
+        navigation_state = OUT_OF_BOUNDS;
       } else {
         guidance_h_set_body_vel(speed_sp, 0);
       }
@@ -183,6 +193,25 @@ void orange_avoider_guided_periodic(void)
       navigation_state = REENTER_ARENA;
 
       break;
+    
+    case CLOSE_TO_EDGE:        
+      circle_current_heading = stateGetNedToBodyEulers_f()->psi;
+      // Update heading for circular motion
+      circle_current_heading += circle_angular_rate * DT; // DT = 1/freq
+      FLOAT_ANGLE_NORMALIZE(circle_current_heading);
+
+      // Apply commands
+      guidance_h_set_heading(circle_current_heading);
+      guidance_h_set_body_vel(CIRCLE_FORWARD_SPEED, 0.0f);
+
+      // Check exit condition (e.g., after full circle or centroid safe)
+      if ((fabsf(floor_centroid_frac) < 0.05) && (floor_count > floor_count_threshold * 2)){
+        circle_initialized = false;
+        navigation_state = SAFE; 
+      }
+      break;
+
+
     case REENTER_ARENA:
       // force floor center to opposite side of turn to head back into arena
       if (floor_count >= floor_count_threshold && avoidance_heading_direction * floor_centroid_frac >= 0.f){
