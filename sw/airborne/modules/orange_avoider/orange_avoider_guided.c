@@ -261,6 +261,28 @@
 #include <stdio.h>
 #include <time.h>
 
+// Include optical flow modules
+#include "modules/computer_vision/opticflow/opticflow_calculator.h"
+#include "modules/computer_vision/opticflow/inter_thread_data.h"
+#include "modules/computer_vision/opticflow/size_divergence.h"
+
+#define ORANGE_AVOIDER_VERBOSE TRUE
+// Set a less frequent interval for divergence printing to reduce output
+#define DIVERGENCE_PRINT_FREQUENCY 20
+
+#define PRINT(string,...) fprintf(stderr, "[orange_avoider->%s()] " string,__FUNCTION__ , ##__VA_ARGS__)
+#if ORANGE_AVOIDER_VERBOSE
+#define VERBOSE_PRINT PRINT
+#else
+#define VERBOSE_PRINT(...)
+#endif
+
+// Define functions that only print divergence-related info or suppress prints
+#define DIVERGENCE_PRINT(string,...) VERBOSE_PRINT(string, ##__VA_ARGS__)
+#define SILENT_PRINT(...) do {} while(0)
+// Message counter for controlling print frequency
+static uint16_t msg_counter = 0;
+
 defineuint8_t chooseRandomIncrementAvoidance(void);
 
 enum navigation_state_t {
@@ -278,7 +300,7 @@ float oag_bottom_cam_count_frac = 0.03f;       // obstacle detection threshold a
 float oag_color_count_frac = 0.18f;       // obstacle detection threshold as a fraction of total of image
 float oag_floor_count_frac = 0.05f;       // floor detection threshold as a fraction of total of image
 //optical flow threshold
-float oag_optical_flow_threshold = 0.1f;  // optical flow threshold for obstacle detection
+float oag_optical_flow_threshold = 0.01f;  // optical flow threshold for obstacle detection
 //Velocity
 float oag_optical_flow_speed = 0.2f;      // speed for optical flow obstacle avoidance
 float oag_max_speed = 0.5f;               // max flight speed [m/s]
@@ -288,7 +310,7 @@ float oag_heading_rate = RadOfDeg(5.f);  // heading change setpoint for avoidanc
 // define and initialise global variables
 
 enum navigation_state_t navigation_state = SAFE;   // current state in state machine
-int32_t optical_flow_count = 0;                // optical flow count from optical flow detector for obstacle detection
+float divergence = 0.0f;                // optical flow count from optical flow detector for obstacle detection
 int32_t floor_count = 0;                // green color count from color filter for floor detection
 int32_t floor_centroid = 0;             // floor detector centroid in y direction (along the horizon)
 int32_t bottom_cam_count = 0;          // orange color count from color filter for obstacle detection
@@ -331,24 +353,40 @@ static void bottom_cam_detection_cb(int32_t upper_left, int32_t upper_right, int
   
 }
 
-//Placeholder for optical flow detection. The number of pixels with a high optical flow is counted.
-static abi_event optical_flow_detection_ev;
-static void optical_flow_detection_cb(float quality, int32_t divergence_x, int32_t divergence_y)
-{
-  optical_flow_count = quality;
+#ifndef ORANGE_AVOIDER_OPTICAL_FLOW_ID
+#define ORANGE_AVOIDER_OPTICAL_FLOW_ID ABI_BROADCAST
+#endif
+static abi_event opticflow_ev;
 
-}
+static void opticflow_cb(uint8_t sender_id __attribute__((unused)), 
+                        uint32_t stamp __attribute__((unused)),
+                        int flow_x __attribute__((unused)), 
+                        int flow_y __attribute__((unused)),
+                        int flow_der_x __attribute__((unused)), 
+                        int flow_der_y __attribute__((unused)),
+                        float quality __attribute__((unused)), 
+                        float size_divergence)
 {
-  optical_flow_count = quality;
-  coords_divergence[0] = divergence_x;
-  coords_divergence[1] = divergence_y;
+  // Only process divergence in SAFE state - ignore during all turning states
+  if (navigation_state == SAFE) {
+    divergence = size_divergence;
+    
+    // Print divergence values at the specified frequency
+    static uint8_t flow_msg_counter = 0;
+    flow_msg_counter++;
+    
+    if (flow_msg_counter % DIVERGENCE_PRINT_FREQUENCY == 0) {
+      // Only print every DIVERGENCE_PRINT_FREQUENCY calls
+      DIVERGENCE_PRINT("Divergence value from optical flow: %f\n", divergence);
+    }
+  }
 }
 
 
 /*
  * Initialisation function
  */
-void new_script_init(void)
+void orange_avoider_guided_init(void)
 {
   // Initialise random values
   srand(time(NULL));
@@ -357,7 +395,13 @@ void new_script_init(void)
   // bind our callbacks to receive the color filter outputs
   AbiBindMsgVISUAL_DETECTION(FLOOR_VISUAL_DETECTION_ID, &floor_detection_ev, floor_detection_cb);
   AbiBindMsgVISUAL_DETECTION(BOTTOM_CAM_VISUAL_DETECTION_ID, &bottom_cam_detection_ev, bottom_cam_detection_cb);
-  AbiBindMsgVISUAL_DETECTION(OPTICAL_FLOW_VISUAL_DETECTION_ID, &optical_flow_detection_ev, optical_flow_detection_cb);
+  // bind our opticflow callback to receive the opticflow results
+  AbiBindMsgOPTICAL_FLOW(ORANGE_AVOIDER_OPTICAL_FLOW_ID, &opticflow_ev, opticflow_cb);
+
+  // Register telemetry for obstacle_free_confidence
+  register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_OBSTACLE_CONFIDENCE, send_obstacle_confidence);
+  
+  DIVERGENCE_PRINT("Orange Avoider initialized with divergence threshold: %f\n", oa_divergence_threshold);
 }
 
 /*
@@ -371,6 +415,15 @@ void new_script_periodic(void)
     return;
   }
 
+  // Increment counter
+  msg_counter++;
+
+  // Print divergence information at the specified frequency
+  if (msg_counter % DIVERGENCE_PRINT_FREQUENCY == 0) {
+    DIVERGENCE_PRINT("Divergence: %f  threshold: %f state: %d\n", 
+               divergence, oa_divergence_threshold, navigation_state);
+  }
+
   // compute current color thresholds
   int32_t floor_count_threshold = oag_floor_count_frac * front_camera.output_size.w * front_camera.output_size.h;
   int32_t bottom_cam_threshold = oag_bottom_cam_count_frac * front_camera.output_size.w * front_camera.output_size.h;
@@ -381,7 +434,8 @@ void new_script_periodic(void)
 
   switch (navigation_state){
     case SAFE:
-      if (optical_flow_count > optical_flow_threshold) {
+      guidance_h_set_body_vel(oag_max_speed, 0);
+      if (divergence > optical_flow_threshold) {
       navigation_state = OBSTACLE_FOUND_OPTICAL_FLOW;
       } else if (bottom_cam_count > bottom_cam_threshold) {
       navigation_state = OBSTACLE_FOUND_BOTTOM;
@@ -391,7 +445,7 @@ void new_script_periodic(void)
       break;
 
     case OBSTACLE_FOUND_OPTICAL_FLOW:
-      if (optical_flow_count <= optical_flow_threshold) {
+      if (divergence <= optical_flow_threshold) {
       navigation_state = SAFE;
       } else {
       // Implement avoidance maneuver based on divergence coordinates
