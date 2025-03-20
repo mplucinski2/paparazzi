@@ -204,3 +204,19 @@ tests/results/*
 
 # K-develop
 *.kate-swp
+
+# Image files
+vlcsnap-2025-03-20-22h12m27s116.png
+
+# Documentation files
+orange_avoider_guided_implementation.md
+optical_flow_divergence_implementation.md
+building_modules_paparazzi.md
+obstacle_avoidance_changes.md
+green_avoider_modifications.md
+# Ignore all markdown files
+*.md
+
+# But don't ignore these specific files
+!README.md
+!CONTRIBUTING.md

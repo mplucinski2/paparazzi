@@ -49,6 +49,13 @@ extern uint8_t cod_cr_max2;
 extern bool cod_draw1;
 extern bool cod_draw2;
 
+// ROI settings for camera 1
+extern uint16_t roi_x_min1;
+extern uint16_t roi_x_max1;
+extern uint16_t roi_y_min1;
+extern uint16_t roi_y_max1;
+extern bool use_roi1;
+
 // Module functions
 extern void color_object_detector_init(void);
 extern void color_object_detector_periodic(void);
