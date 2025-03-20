@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <time.h>
 
+
 #define ORANGE_AVOIDER_VERBOSE TRUE
 
 #define PRINT(string,...) fprintf(stderr, "[orange_avoider_guided->%s()] " string,__FUNCTION__ , ##__VA_ARGS__)
@@ -49,12 +50,14 @@ enum navigation_state_t {
   OBSTACLE_FOUND,
   SEARCH_FOR_SAFE_HEADING,
   OUT_OF_BOUNDS,
+  BACKING_UP,       // New state for backward movement
+  ROTATE_FIXED,     // New state for fixed rotation
   REENTER_ARENA
 };
 
 // define settings
 float oag_color_count_frac = 0.18f;       // obstacle detection threshold as a fraction of total of image
-float oag_floor_count_frac = 0.05f;       // floor detection threshold as a fraction of total of image
+float oag_floor_count_frac = 0.95f;       // floor detection threshold as a fraction of total of image
 float oag_max_speed = 0.5f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
 
@@ -65,6 +68,14 @@ int32_t floor_count = 0;                // green color count from color filter f
 int32_t floor_centroid = 0;             // floor detector centroid in y direction (along the horizon)
 float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
 int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead if safe.
+// Add global variables for timing and angle tracking
+float backward_timer = 0;
+float rotation_timer = 0;
+float fixed_rotation_angle = 0;
+const float BACKUP_DURATION = 2.0f;  // seconds to back up
+const float ROTATION_DURATION = 3.0f; // seconds to rotate
+const float BACKUP_SPEED = 0.7f;     // m/s backward speed
+const float FIXED_ROTATION_ANGLE = RadOfDeg(135.0f);  // 135 degree turn
 
 const int16_t max_trajectory_confidence = 5;  // number of consecutive negative object detections to be sure we are obstacle free
 
@@ -124,9 +135,10 @@ void orange_avoider_guided_periodic(void)
 
   // compute current color thresholds
   int32_t color_count_threshold = oag_color_count_frac * front_camera.output_size.w * front_camera.output_size.h;
-  int32_t floor_count_threshold = oag_floor_count_frac * front_camera.output_size.w * front_camera.output_size.h;
-  float floor_centroid_frac = floor_centroid / (float)front_camera.output_size.h / 2.f;
-
+  // Use bottom camera dimensions for floor detection
+  int32_t floor_count_threshold = oag_floor_count_frac * bottom_camera.output_size.w * bottom_camera.output_size.h;
+  float floor_centroid_frac = floor_centroid / (float)bottom_camera.output_size.h / 2.f;
+  
   VERBOSE_PRINT("Color_count: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
   VERBOSE_PRINT("Floor count: %d, threshold: %d\n", floor_count, floor_count_threshold);
   VERBOSE_PRINT("Floor centroid: %f\n", floor_centroid_frac);
@@ -137,7 +149,10 @@ void orange_avoider_guided_periodic(void)
   } else {
     obstacle_free_confidence -= 2;  // be more cautious with positive obstacle detections
   }
-
+  static float prev_time = 0;
+  float now = get_sys_time_float();
+  float dt = now - prev_time;
+  prev_time = now;
   // bound obstacle_free_confidence
   Bound(obstacle_free_confidence, 0, max_trajectory_confidence);
 
@@ -145,8 +160,8 @@ void orange_avoider_guided_periodic(void)
 
   switch (navigation_state){
     case SAFE:
-      if (floor_count < floor_count_threshold || fabsf(floor_centroid_frac) > 0.12){
-        navigation_state = OUT_OF_BOUNDS;
+    if (floor_count < floor_count_threshold){
+      navigation_state = OUT_OF_BOUNDS;
       } else if (obstacle_free_confidence == 0){
         navigation_state = OBSTACLE_FOUND;
       } else {
@@ -177,23 +192,74 @@ void orange_avoider_guided_periodic(void)
       // stop
       guidance_h_set_body_vel(0, 0);
 
-      // start turn back into arena
-      guidance_h_set_heading_rate(avoidance_heading_direction * RadOfDeg(15));
-
-      navigation_state = REENTER_ARENA;
+      // Prepare for backing up
+      backward_timer = 0;
+      navigation_state = BACKING_UP;
 
       break;
+    case BACKING_UP:
+      // Move backward for a set time
+      guidance_h_set_body_vel(-BACKUP_SPEED, 0);
+  
+      // Update timer
+      backward_timer += dt;
+  
+      if (backward_timer >= BACKUP_DURATION) {
+        // Stop and prepare for rotation
+        guidance_h_set_body_vel(0, 0);
+    
+        // Pick a direction to rotate
+        chooseRandomIncrementAvoidance();
+    
+        // Store current heading
+        float current_heading = stateGetNedToBodyEulers_f()->psi;
+    
+        // Calculate target heading (add or subtract the fixed angle based on direction)
+        float target_heading = current_heading + (avoidance_heading_direction * FIXED_ROTATION_ANGLE);
+    
+        // Normalize to [-pi, pi]
+        while (target_heading > M_PI) target_heading -= 2.0f * M_PI;
+        while (target_heading < -M_PI) target_heading += 2.0f * M_PI;
+    
+        // Store target heading for the rotation state to use
+        fixed_rotation_angle = target_heading;
+    
+        navigation_state = ROTATE_FIXED;
+      }
+      break;
+    case ROTATE_FIXED:
+      // Get current heading
+      float current_heading = stateGetNedToBodyEulers_f()->psi;
+      
+      // Set desired heading (stored from previous state)
+      guidance_h_set_heading(fixed_rotation_angle);
+      
+      // Calculate angular difference
+      float angle_diff = fixed_rotation_angle - current_heading;
+      // Normalize to [-pi, pi]
+      while (angle_diff > M_PI) angle_diff -= 2.0f * M_PI;
+      while (angle_diff < -M_PI) angle_diff += 2.0f * M_PI;
+      
+      // Check if we've reached the desired heading (within 5 degrees)
+      if (fabsf(angle_diff) < RadOfDeg(5.0f)) {
+        navigation_state = REENTER_ARENA;
+      }
+      break;
     case REENTER_ARENA:
-      // force floor center to opposite side of turn to head back into arena
-      if (floor_count >= floor_count_threshold && avoidance_heading_direction * floor_centroid_frac >= 0.f){
-        // return to heading mode
-        guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
-
-        // reset safe counter
-        obstacle_free_confidence = 0;
-
-        // ensure direction is safe before continuing
-        navigation_state = SAFE;
+      // Check if we have green floor again or just wait a bit
+      if (floor_count > floor_count_threshold || obstacle_free_confidence >= 3) {
+      // return to heading mode
+      guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
+      // reset safe counter
+      obstacle_free_confidence = 0;
+      // ensure direction is safe before continuing
+      navigation_state = SAFE;
+      } else {
+        // Gradually increase speed to escape boundary
+        static float reenter_speed = 0.1f;
+        reenter_speed = fminf(reenter_speed + 0.01f, 0.3f);
+        guidance_h_set_body_vel(reenter_speed, 0);
+        obstacle_free_confidence++;
       }
       break;
     default:
