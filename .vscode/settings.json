@@ -10,7 +10,11 @@
     },
     "files.associations": {
         "Makefile.*": "makefile",
+
         "time.h": "c"
+
+        "orange_avoider.h": "c"
+
     },
     "C_Cpp.dimInactiveRegions": false,
     "esbonio.sphinx.confDir": "",

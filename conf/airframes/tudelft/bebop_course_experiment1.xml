@@ -65,24 +65,12 @@
     <!-- Optical flow module for obstacle detection -->
     <module name="cv_opticflow">
       <define name="OPTICFLOW_CAMERA" value="front_camera"/>
-      <define name="MAX_HORIZON" value="10"/>
-      <define name="OPTICFLOW_MAX_TRACK_CORNERS" value="10"/>
-      <define name="OPTICFLOW_SUBPIXEL_FACTOR" value="200"/>
-      <define name="OPTICFLOW_CORNER_METHOD" value="0"/>
+      <define name="OPTICFLOW_DEROTATION" value="TRUE"/>
+      <define name="OPTICFLOW_FPS" value="20"/>
+      <define name="OPTICFLOW_FEATURE_MANAGEMENT" value="TRUE"/>
       <define name="OPTICFLOW_DEROTATION_CORRECTION_FACTOR_X" value="0.8"/>
       <define name="OPTICFLOW_DEROTATION_CORRECTION_FACTOR_Y" value="0.85"/>
-      <define name="MAX_TRACK_CORNERS" value="10"/>
-      <!-- Configure ROI to use only the middle cell of a 5×3 grid -->
-      <define name="OPTICFLOW_ROI_DIV_X" value="5"/>
-      <define name="OPTICFLOW_ROI_DIV_Y" value="3"/>
-      <define name="OPTICFLOW_ROI_CROP_X" value="2"/>
-      <define name="OPTICFLOW_ROI_CROP_Y" value="1"/>
-      <!-- Enable visualization of optical flow -->
-      <define name="OPTICFLOW_SHOW_FLOW" value="TRUE"/>
-      <define name="OPTICFLOW_SHOW_CORNERS" value="TRUE"/>
-      
-      <!-- Add a debug flag to create a dummy ROI visualization -->
-      <define name="OPTICFLOW_DEBUG" value="TRUE"/>
+      <define name="OPTICFLOW_MEDIAN_FILTER" value="TRUE"/>
     </module>
     
     <!-- Keep color detection for debugging purposes -->
@@ -93,7 +81,7 @@
     </module>
     
     <!-- Orange avoider now using optical flow instead of color detection -->
-    <module name="orange_avoider">
+    <module name="experiment1">
       <define name="ORANGE_AVOIDER_OPTICAL_FLOW_ID" value="ABI_BROADCAST"/>
       <define name="ORANGE_AVOIDER_VERBOSE" value="TRUE"/>
       <define name="OA_DIVERGENCE_THRESHOLD" value="0.05"/>

@@ -8,8 +8,7 @@
  * @file "modules/orange_avoider/orange_avoider.h"
  * @author Roland Meertens
  * Example on how to use the colours detected to avoid orange pole in the cyberzoo
- * Modified to use optical flow divergence instead of color detection.
- * When an obstacle is detected, the drone turns exactly 90 degrees clockwise.
+ * Modified to use optical flow divergence instead of color detection
  */
 
 #ifndef ORANGE_AVOIDER_H

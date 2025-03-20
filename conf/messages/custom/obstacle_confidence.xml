@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<messages>
+  <message name="OBSTACLE_CONFIDENCE" id="186">
+    <description>Confidence level in obstacle detection and avoidance</description>
+    <field name="confidence" type="int16" format="%d">Obstacle free confidence level</field>
+    <field name="divergence" type="float" format="%.3f">Optical flow divergence value</field>
+    <field name="threshold" type="float" format="%.3f">Divergence threshold</field>
+    <field name="nav_state" type="uint8">Navigation state (0=SAFE, 1=OBSTACLE, 2=SEARCH, 3=OUT_OF_BOUNDS)</field>
+  </message>
+</messages> 
