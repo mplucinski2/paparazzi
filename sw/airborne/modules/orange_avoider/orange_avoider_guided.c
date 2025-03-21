@@ -46,6 +46,7 @@ uint8_t chooseRandomIncrementAvoidance(void);
 
 enum navigation_state_t {
   SAFE,
+  NEARING_OBSTACLE,
   OBSTACLE_FOUND,
   SEARCH_FOR_SAFE_HEADING,
   OUT_OF_BOUNDS,
@@ -138,6 +139,7 @@ void orange_avoider_guided_periodic(void)
   VERBOSE_PRINT("Color_count: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
   VERBOSE_PRINT("Floor count: %d, threshold: %d\n", floor_count, floor_count_threshold);
   VERBOSE_PRINT("Floor centroid: %f\n", floor_centroid_frac);
+  VERBOSE_PRINT("Obstacle free confidence: %d\n", obstacle_free_confidence);
 
   // update our safe confidence using color threshold
   if(color_count < color_count_threshold){
@@ -153,29 +155,29 @@ void orange_avoider_guided_periodic(void)
 
   switch (navigation_state){
     case SAFE:
-      if (obstacle_free_confidence == 0){
+      if(obstacle_free_confidence == 0){
         navigation_state = OBSTACLE_FOUND;
       } else if ((floor_count < floor_count_threshold) || (fabsf(floor_centroid_frac) > 0.2)){
         navigation_state = CLOSE_TO_EDGE;
-      } else if (floor_count < floor_count_threshold * 0.5){
+      } else if (floor_count < floor_count_threshold * 0.25){
         navigation_state = OUT_OF_BOUNDS;
       } else {
         guidance_h_set_body_vel(speed_sp, 0);
       }
 
       break;
-    case OBSTACLE_FOUND:
+
+      case OBSTACLE_FOUND:
       // stop
       guidance_h_set_body_vel(0, 0);
 
       // randomly select new search direction
-      chooseRandomIncrementAvoidance();
-
       navigation_state = SEARCH_FOR_SAFE_HEADING;
 
       break;
+
     case SEARCH_FOR_SAFE_HEADING:
-      guidance_h_set_heading_rate(avoidance_heading_direction * oag_heading_rate);
+      guidance_h_set_heading_rate(2*oag_heading_rate);
 
       // make sure we have a couple of good readings before declaring the way safe
       if (obstacle_free_confidence >= 2){
@@ -183,6 +185,7 @@ void orange_avoider_guided_periodic(void)
         navigation_state = SAFE;
       }
       break;
+
     case OUT_OF_BOUNDS:
       // stop
       guidance_h_set_body_vel(0, 0);
@@ -194,19 +197,17 @@ void orange_avoider_guided_periodic(void)
 
       break;
     
-    case CLOSE_TO_EDGE:        
-      circle_current_heading = stateGetNedToBodyEulers_f()->psi;
-      // Update heading for circular motion
-      circle_current_heading += circle_angular_rate * DT; // DT = 1/freq
-      FLOAT_ANGLE_NORMALIZE(circle_current_heading);
+    case CLOSE_TO_EDGE:
+      if (obstacle_free_confidence == 0){
+        navigation_state = OBSTACLE_FOUND;     
+      }
 
-      // Apply commands
-      guidance_h_set_heading(circle_current_heading);
+      guidance_h_set_heading_rate(oag_heading_rate * 2);
       guidance_h_set_body_vel(CIRCLE_FORWARD_SPEED, 0.0f);
 
       // Check exit condition (e.g., after full circle or centroid safe)
       if ((fabsf(floor_centroid_frac) < 0.05) && (floor_count > floor_count_threshold * 2)){
-        circle_initialized = false;
+        guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
         navigation_state = SAFE; 
       }
       break;
