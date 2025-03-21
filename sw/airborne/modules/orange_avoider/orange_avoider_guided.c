@@ -58,9 +58,9 @@ enum navigation_state_t {
 };
 
 // define settings
-float oag_color_count_frac = 0.02f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
+float oag_color_count_frac = 0.7f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
 float oag_floor_count_frac = 0.05f;       // floor detection threshold as a fraction of total of image
-float oag_max_speed = 0.5f;               // max flight speed [m/s]
+float oag_max_speed = 0.1f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
 float oag_heading_change = RadOfDeg(135.f); // fixed heading change angle for avoidance
 
