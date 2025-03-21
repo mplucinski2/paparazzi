@@ -10,7 +10,8 @@
     },
     "files.associations": {
         "Makefile.*": "makefile",
-        "ranges": "c"
+        "ranges": "c",
+        "string": "c"
     },
     "C_Cpp.dimInactiveRegions": false,
     "esbonio.sphinx.confDir": "",

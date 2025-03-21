@@ -18,12 +18,6 @@
  * less dependent on a global positioning estimate as witht the navigation mode. This module can be used with a simple
  * speed estimate rather than a global position.
  *
- * Here we also need to use our onboard sensors to stay inside of the cyberzoo and not collide with the nets. For this
- * we employ a simple color detector, similar to the green obstacles but for detecting the floor. When the total amount
- * of floor color drops below a given threshold (given by floor_count_frac) we assume we are near the edge of the zoo and turn
- * around. The color detection is done by the cv_detect_color_object module, use the FLOOR_VISUAL_DETECTION_ID setting to
- * define which filter to use.
- * 
  * A Region of Interest (ROI) is implemented to only process green objects in the middle part of the bottom camera image.
  * ROI dimensions can be configured in the airframe file.
  */
@@ -51,15 +45,13 @@ uint8_t chooseRandomIncrementAvoidance(void);
 
 enum navigation_state_t {
   SAFE,
-  OBSTACLE_FOUND,
-  SEARCH_FOR_SAFE_HEADING
+  OBSTACLE_FOUND
 };
 
 // define settings
-float oag_color_count_frac = 0.7f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
-float oag_max_speed = 0.1f;               // max flight speed [m/s]
+float oag_color_count_frac = 0.99f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
+float oag_max_speed = 0.3f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
-float oag_heading_change = RadOfDeg(135.f); // fixed heading change angle for avoidance
 
 // Define fixed scan area for green detection (40x80=3200 pixels)
 #ifndef OAG_FIXED_SCAN_AREA
@@ -71,7 +63,7 @@ float __attribute__((unused)) oag_roi_width = 0.0f;    // Unused ROI width setti
 float __attribute__((unused)) oag_roi_height = 0.0f;   // Unused ROI height setting (required by settings system)
 
 // define and initialise global variables
-enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;   // current state in state machine
+enum navigation_state_t navigation_state = OBSTACLE_FOUND;   // current state in state machine
 int32_t color_count = 0;                // green color count from color filter for obstacle detection
 float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
 int32_t camera_pixel_count = 0;         // total number of pixels in the camera image
@@ -125,7 +117,7 @@ void orange_avoider_guided_periodic(void)
 {
   // Only run the mudule if we are in the correct flight mode
   if (guidance_h.mode != GUIDANCE_H_MODE_GUIDED) {
-    navigation_state = SEARCH_FOR_SAFE_HEADING;
+    navigation_state = OBSTACLE_FOUND;
     return;
   }
 
@@ -135,41 +127,36 @@ void orange_avoider_guided_periodic(void)
   VERBOSE_PRINT("Green_count: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
   VERBOSE_PRINT("Fixed scan area: %d pixels\n", OAG_FIXED_SCAN_AREA);
 
-  // Calculate speed based directly on obstacle presence (not confidence)
+  // Calculate speed based directly on obstacle presence
   float speed_sp = color_count < color_count_threshold ? 0.0f : oag_max_speed;
 
   switch (navigation_state){
     case SAFE:
       if (color_count < color_count_threshold){
+        // Obstacle detected - stop and transition to OBSTACLE_FOUND state
+        guidance_h_set_body_vel(0, 0);
         navigation_state = OBSTACLE_FOUND;
       } else {
+        // No obstacle - proceed forward
         guidance_h_set_body_vel(speed_sp, 0);
       }
       break;
 
     case OBSTACLE_FOUND:
-      // stop
+      // Stop the drone
       guidance_h_set_body_vel(0, 0);
-
-      // Set fixed 135-degree heading change instead of random direction
-      avoidance_heading_direction = 1.f;  // Use positive direction
       
-      navigation_state = SEARCH_FOR_SAFE_HEADING;
-      break;
-
-    case SEARCH_FOR_SAFE_HEADING:
-      // Use continuous rate-based turning instead of fixed angle change
+      // Continuously rotate to search for a safe heading
       guidance_h_set_heading_rate(avoidance_heading_direction * oag_heading_rate);
 
-      // Direct threshold check instead of confidence
-      if (color_count < color_count_threshold) {
-        // Still seeing obstacle, keep turning
-      } else {
-        // No obstacle detected, go back to SAFE state
+      // Check if we've found a safe heading (no obstacle detected)
+      if (color_count >= color_count_threshold) {
+        // Safe heading found - stop rotating and transition back to SAFE state
         guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
         navigation_state = SAFE;
       }
       break;
+      
     default:
       break;
   }

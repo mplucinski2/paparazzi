@@ -18,12 +18,6 @@
  * less dependent on a global positioning estimate as witht the navigation mode. This module can be used with a simple
  * speed estimate rather than a global position.
  *
- * Here we also need to use our onboard sensors to stay inside of the cyberzoo and not collide with the nets. For this
- * we employ a simple color detector, similar to the green obstacles but for detecting the floor. When the total amount
- * of floor color drops below a given threshold (given by floor_count_frac) we assume we are near the edge of the zoo and turn
- * around. The color detection is done by the cv_detect_color_object module, use the FLOOR_VISUAL_DETECTION_ID setting to
- * define which filter to use.
- *
  * A Region of Interest (ROI) is implemented to only process green objects in the middle part of the bottom camera image.
  * ROI dimensions can be configured in the airframe file using OAG_ROI_HEIGHT and OAG_ROI_WIDTH.
  */
@@ -35,7 +29,6 @@
 extern float oag_color_count_frac;  // obstacle detection threshold as a fraction of total of image
 extern float oag_max_speed;         // max flight speed [m/s]
 extern float oag_heading_rate;      // heading rate setpoint [rad/s]
-extern float oag_heading_change;    // fixed heading change angle for avoidance [rad]
 
 // ROI settings - can be defined in airframe file using OAG_ROI_HEIGHT and OAG_ROI_WIDTH
 extern float oag_roi_height;        // height of the ROI as a fraction of image height (from top)
