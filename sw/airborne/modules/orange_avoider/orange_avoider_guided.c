@@ -33,6 +33,7 @@
 #include "generated/airframe.h"
 #include "state.h"
 #include "modules/core/abi.h"
+#include <stdio.h>
 #include <time.h>
 
 #define ORANGE_AVOIDER_VERBOSE TRUE
