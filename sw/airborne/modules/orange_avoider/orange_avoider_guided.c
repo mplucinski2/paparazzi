@@ -157,9 +157,9 @@ void orange_avoider_guided_periodic(void)
     case SAFE:
       if(obstacle_free_confidence == 0){
         navigation_state = OBSTACLE_FOUND;
-      } else if ((floor_count < floor_count_threshold) || (fabsf(floor_centroid_frac) > 0.2)){
+      } else if ((floor_count < floor_count_threshold) || (fabsf(floor_centroid_frac) > 0.1)){
         navigation_state = CLOSE_TO_EDGE;
-      } else if (floor_count < floor_count_threshold * 0.25){
+      } else if (floor_count < floor_count_threshold * 0.4){
         navigation_state = OUT_OF_BOUNDS;
       } else {
         guidance_h_set_body_vel(speed_sp, 0);
@@ -203,7 +203,7 @@ void orange_avoider_guided_periodic(void)
       }
 
       guidance_h_set_heading_rate(oag_heading_rate * 2);
-      guidance_h_set_body_vel(CIRCLE_FORWARD_SPEED, 0.0f);
+      guidance_h_set_body_vel(speed_sp, 0.0f);
 
       // Check exit condition (e.g., after full circle or centroid safe)
       if ((fabsf(floor_centroid_frac) < 0.05) && (floor_count > floor_count_threshold * 2)){
