@@ -49,14 +49,15 @@ enum navigation_state_t {
   OBSTACLE_FOUND,
   SEARCH_FOR_SAFE_HEADING,
   OUT_OF_BOUNDS,
-  REENTER_ARENA
+  REENTER_ARENA, 
+  EARLY_OBSTACLE_DETECTED
 };
 
 // define settings
 float oag_color_count_frac = 0.18f;       // obstacle detection threshold as a fraction of total of image
 float oag_floor_count_frac = 0.05f;       // floor detection threshold as a fraction of total of image
 float oag_max_speed = 0.5f;               // max flight speed [m/s]
-float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
+float oag_heading_rate = RadOfDeg(80.f);  // heading change setpoint for avoidance [rad/s]
 
 // define and initialise global variables
 enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;   // current state in state machine
@@ -147,16 +148,25 @@ void orange_avoider_guided_periodic(void)
     case SAFE:
       if (floor_count < floor_count_threshold || fabsf(floor_centroid_frac) > 0.12){
         navigation_state = OUT_OF_BOUNDS;
-      } else if (obstacle_free_confidence == 0){
+      } 
+      // If obstacle confidence is low but not yet zero, enter EARLY_OBSTACLE_DETECTED
+      else if (obstacle_free_confidence <= 2 && obstacle_free_confidence > 0) {
+          navigation_state = EARLY_OBSTACLE_DETECTED;
+      } 
+        else if (obstacle_free_confidence == 0){
         navigation_state = OBSTACLE_FOUND;
-      } else {
-        guidance_h_set_body_vel(speed_sp, 0);
+      } 
+        else {
+
+          guidance_h_set_body_vel(speed_sp, 0);
       }
 
       break;
     case OBSTACLE_FOUND:
       // stop
-      guidance_h_set_body_vel(0, 0);
+      // guidance_h_set_body_vel(0, 0);
+      float reduced_speed_of = fmaxf(speed_sp * 0.5f, 0.1f * oag_max_speed);  // 40% of normal speed
+      guidance_h_set_body_vel(reduced_speed_of, 0);
 
       // randomly select new search direction
       chooseRandomIncrementAvoidance();
@@ -196,6 +206,21 @@ void orange_avoider_guided_periodic(void)
         navigation_state = SAFE;
       }
       break;
+    
+      case EARLY_OBSTACLE_DETECTED:
+      // Reduce speed but keep moving
+      float reduced_speed_sp = speed_sp;  // Slow down to 50% speed
+      guidance_h_set_body_vel(reduced_speed_sp, 0);
+  
+      // Start turning while moving forward
+      guidance_h_set_heading_rate(avoidance_heading_direction * oag_heading_rate);
+  
+      // If the obstacle disappears (color count below threshold for a few cycles), return to SAFE
+      if (obstacle_free_confidence >= 2) {
+          guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
+          navigation_state = SAFE;
+      }
+      break;  
     default:
       break;
   }
