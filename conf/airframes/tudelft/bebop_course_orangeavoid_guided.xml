@@ -73,7 +73,7 @@
       <define name="ORANGE_AVOIDER_VISUAL_DETECTION_ID" value="COLOR_OBJECT_DETECTION1_ID"/>
       
       <!-- Specific scan area size for top middle region (40x80 pixels) -->
-      <define name="OAG_FIXED_SCAN_AREA" value="4800"/>
+      <define name="OAG_FIXED_SCAN_AREA" value="4000"/>
       
       <!-- Threshold as percentage (value between 0.0 and 1.0) -->
       <define name="OAG_COLOR_COUNT_FRAC" value="0.05"/>

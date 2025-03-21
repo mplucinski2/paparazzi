@@ -26,7 +26,7 @@
     <file name="orange_avoider_guided.h"/>
   </header>
   <init fun="orange_avoider_guided_init()"/>
-  <periodic fun="orange_avoider_guided_periodic()" freq="20" start="FALSE" stop="FALSE" autorun="TRUE"/>
+  <periodic fun="orange_avoider_guided_periodic()" freq="30" start="FALSE" stop="FALSE" autorun="TRUE"/>
   <makefile target="ap|nps">
     <file name="orange_avoider_guided.c"/>
   </makefile>
