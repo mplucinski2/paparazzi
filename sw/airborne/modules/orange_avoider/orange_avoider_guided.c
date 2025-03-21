@@ -52,14 +52,11 @@ uint8_t chooseRandomIncrementAvoidance(void);
 enum navigation_state_t {
   SAFE,
   OBSTACLE_FOUND,
-  SEARCH_FOR_SAFE_HEADING,
-  OUT_OF_BOUNDS,
-  REENTER_ARENA
+  SEARCH_FOR_SAFE_HEADING
 };
 
 // define settings
 float oag_color_count_frac = 0.7f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
-float oag_floor_count_frac = 0.05f;       // floor detection threshold as a fraction of total of image
 float oag_max_speed = 0.1f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
 float oag_heading_change = RadOfDeg(135.f); // fixed heading change angle for avoidance
@@ -76,8 +73,6 @@ float __attribute__((unused)) oag_roi_height = 0.0f;   // Unused ROI height sett
 // define and initialise global variables
 enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;   // current state in state machine
 int32_t color_count = 0;                // green color count from color filter for obstacle detection
-int32_t floor_count = 0;                // floor color count from color filter for floor detection
-int32_t floor_centroid = 0;             // floor detector centroid in y direction (along the horizon)
 float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
 int32_t camera_pixel_count = 0;         // total number of pixels in the camera image
 
@@ -85,7 +80,7 @@ const int16_t max_trajectory_confidence = 5;  // number of consecutive negative 
 
 // This call back will be used to receive the color count from the green detector
 #ifndef ORANGE_AVOIDER_VISUAL_DETECTION_ID
-#error This module requires two color filters, as such you have to define ORANGE_AVOIDER_VISUAL_DETECTION_ID to the green filter
+#error This module requires a color filter, please define ORANGE_AVOIDER_VISUAL_DETECTION_ID to the obstacle filter
 #error Please define ORANGE_AVOIDER_VISUAL_DETECTION_ID to be COLOR_OBJECT_DETECTION1_ID or COLOR_OBJECT_DETECTION2_ID in your airframe
 #endif
 static abi_event color_detection_ev;
@@ -100,20 +95,6 @@ static void color_detection_cb(uint8_t __attribute__((unused)) sender_id,
   
   // Debug output
   VERBOSE_PRINT("Green detected: quality=%d, pos=(%d,%d)\n", quality, pixel_x, pixel_y);
-}
-
-#ifndef FLOOR_VISUAL_DETECTION_ID
-#error This module requires two color filters, as such you have to define FLOOR_VISUAL_DETECTION_ID to the floor filter
-#error Please define FLOOR_VISUAL_DETECTION_ID to be COLOR_OBJECT_DETECTION1_ID or COLOR_OBJECT_DETECTION2_ID in your airframe
-#endif
-static abi_event floor_detection_ev;
-static void floor_detection_cb(uint8_t __attribute__((unused)) sender_id,
-                               int16_t __attribute__((unused)) pixel_x, int16_t pixel_y,
-                               int16_t __attribute__((unused)) pixel_width, int16_t __attribute__((unused)) pixel_height,
-                               int32_t quality, int16_t __attribute__((unused)) extra)
-{
-  floor_count = quality;
-  floor_centroid = pixel_y;
 }
 
 /*
@@ -133,9 +114,8 @@ void orange_avoider_guided_init(void)
                 bottom_camera.output_size.w, bottom_camera.output_size.h);
   VERBOSE_PRINT("Using fixed scan area of %d pixels for green detection\n", OAG_FIXED_SCAN_AREA);
 
-  // bind our colorfilter callbacks to receive the color filter outputs
+  // bind our colorfilter callback to receive the color filter output
   AbiBindMsgVISUAL_DETECTION(ORANGE_AVOIDER_VISUAL_DETECTION_ID, &color_detection_ev, color_detection_cb);
-  AbiBindMsgVISUAL_DETECTION(FLOOR_VISUAL_DETECTION_ID, &floor_detection_ev, floor_detection_cb);
 }
 
 /*
@@ -151,22 +131,16 @@ void orange_avoider_guided_periodic(void)
 
   // compute current color thresholds - use fixed scan area for obstacle detection
   int32_t color_count_threshold = oag_color_count_frac * OAG_FIXED_SCAN_AREA;
-  int32_t floor_count_threshold = oag_floor_count_frac * front_camera.output_size.w * front_camera.output_size.h;
-  float floor_centroid_frac = floor_centroid / (float)front_camera.output_size.h / 2.f;
 
   VERBOSE_PRINT("Green_count: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
   VERBOSE_PRINT("Fixed scan area: %d pixels\n", OAG_FIXED_SCAN_AREA);
-  VERBOSE_PRINT("Floor count: %d, threshold: %d\n", floor_count, floor_count_threshold);
-  VERBOSE_PRINT("Floor centroid: %f\n", floor_centroid_frac);
 
   // Calculate speed based directly on obstacle presence (not confidence)
   float speed_sp = color_count < color_count_threshold ? 0.0f : oag_max_speed;
 
   switch (navigation_state){
     case SAFE:
-      if (floor_count < floor_count_threshold || fabsf(floor_centroid_frac) > 0.12){
-        navigation_state = OUT_OF_BOUNDS;
-      } else if (color_count < color_count_threshold){
+      if (color_count < color_count_threshold){
         navigation_state = OBSTACLE_FOUND;
       } else {
         guidance_h_set_body_vel(speed_sp, 0);
@@ -184,8 +158,8 @@ void orange_avoider_guided_periodic(void)
       break;
 
     case SEARCH_FOR_SAFE_HEADING:
-      // Use fixed heading change of 135 degrees
-      guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi + avoidance_heading_direction * oag_heading_change);
+      // Use continuous rate-based turning instead of fixed angle change
+      guidance_h_set_heading_rate(avoidance_heading_direction * oag_heading_rate);
 
       // Direct threshold check instead of confidence
       if (color_count < color_count_threshold) {
@@ -193,27 +167,6 @@ void orange_avoider_guided_periodic(void)
       } else {
         // No obstacle detected, go back to SAFE state
         guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
-        navigation_state = SAFE;
-      }
-      break;
-
-    case OUT_OF_BOUNDS:
-      // stop
-      guidance_h_set_body_vel(0, 0);
-
-      // start turn back into arena
-      guidance_h_set_heading_rate(avoidance_heading_direction * RadOfDeg(15));
-
-      navigation_state = REENTER_ARENA;
-
-      break;
-    case REENTER_ARENA:
-      // force floor center to opposite side of turn to head back into arena
-      if (floor_count >= floor_count_threshold && avoidance_heading_direction * floor_centroid_frac >= 0.f){
-        // return to heading mode
-        guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
-
-        // reset safe counter
         navigation_state = SAFE;
       }
       break;

@@ -31,12 +31,12 @@
       <define name="LOGGER_FILE_PATH" value="/tmp/paparazzi/log"/>
       
       <!-- Detect green with bottom camera (COLOR_OBJECT_DETECTION1_ID) with updated YUV values -->
-      <define name="COLOR_OBJECT_DETECTOR_LUM_MIN1" value="64"/>
-      <define name="COLOR_OBJECT_DETECTOR_LUM_MAX1" value="123"/>
-      <define name="COLOR_OBJECT_DETECTOR_CB_MIN1" value="80"/>
-      <define name="COLOR_OBJECT_DETECTOR_CB_MAX1" value="101"/>
-      <define name="COLOR_OBJECT_DETECTOR_CR_MIN1" value="118"/>
-      <define name="COLOR_OBJECT_DETECTOR_CR_MAX1" value="124"/>
+      <define name="COLOR_OBJECT_DETECTOR_LUM_MIN1" value="60"/>
+      <define name="COLOR_OBJECT_DETECTOR_LUM_MAX1" value="130"/>
+      <define name="COLOR_OBJECT_DETECTOR_CB_MIN1" value="70"/>
+      <define name="COLOR_OBJECT_DETECTOR_CB_MAX1" value="102"/>
+      <define name="COLOR_OBJECT_DETECTOR_CR_MIN1" value="110"/>
+      <define name="COLOR_OBJECT_DETECTOR_CR_MAX1" value="130"/>
       
       <!-- Detect floor with front camera (COLOR_OBJECT_DETECTION2_ID) -->
       <define name="COLOR_OBJECT_DETECTOR_LUM_MIN2" value="0"/>
@@ -91,7 +91,6 @@
     </module>
     <module name="orange_avoider_guided">
       <define name="ORANGE_AVOIDER_VISUAL_DETECTION_ID" value="COLOR_OBJECT_DETECTION1_ID"/>
-      <define name="FLOOR_VISUAL_DETECTION_ID" value="COLOR_OBJECT_DETECTION2_ID"/>
       
       <!-- Specific scan area size for top middle region (40x80 pixels) -->
       <define name="OAG_FIXED_SCAN_AREA" value="4800"/>
