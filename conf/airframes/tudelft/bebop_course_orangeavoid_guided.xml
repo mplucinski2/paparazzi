@@ -80,10 +80,10 @@
       <define name="COLOR_OBJECT_DETECTOR_VERBOSE1" value="1"/>
       
       <!-- Define ROI for green detection (80x40 pixels = 3200) -->
-      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="80"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="160"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="0"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="240"/>
       <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="0"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="40"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="20"/>
       
       <define name="COLOR_OBJECT_DETECTOR_CAMERA2" value="front_camera"/>
       <define name="COLOR_OBJECT_DETECTOR_FPS2" value="0"/>
@@ -94,7 +94,7 @@
       <define name="FLOOR_VISUAL_DETECTION_ID" value="COLOR_OBJECT_DETECTION2_ID"/>
       
       <!-- Specific scan area size for top middle region (40x80 pixels) -->
-      <define name="OAG_FIXED_SCAN_AREA" value="3200"/>
+      <define name="OAG_FIXED_SCAN_AREA" value="4800"/>
       
       <!-- Threshold as percentage (value between 0.0 and 1.0) -->
       <define name="OAG_COLOR_COUNT_FRAC" value="0.05"/>

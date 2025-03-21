@@ -78,7 +78,6 @@ int32_t color_count = 0;                // green color count from color filter f
 int32_t floor_count = 0;                // floor color count from color filter for floor detection
 int32_t floor_centroid = 0;             // floor detector centroid in y direction (along the horizon)
 float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
-int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead if safe.
 int32_t camera_pixel_count = 0;         // total number of pixels in the camera image
 
 const int16_t max_trajectory_confidence = 5;  // number of consecutive negative object detections to be sure we are obstacle free
@@ -146,7 +145,6 @@ void orange_avoider_guided_periodic(void)
   // Only run the mudule if we are in the correct flight mode
   if (guidance_h.mode != GUIDANCE_H_MODE_GUIDED) {
     navigation_state = SEARCH_FOR_SAFE_HEADING;
-    obstacle_free_confidence = 0;
     return;
   }
 
@@ -160,49 +158,44 @@ void orange_avoider_guided_periodic(void)
   VERBOSE_PRINT("Floor count: %d, threshold: %d\n", floor_count, floor_count_threshold);
   VERBOSE_PRINT("Floor centroid: %f\n", floor_centroid_frac);
 
-  // update our safe confidence using color threshold
-  if(color_count >= color_count_threshold){
-    obstacle_free_confidence++;
-  } else {
-    obstacle_free_confidence -= 2;  // be more cautious with low green pixel count
-  }
-
-  // bound obstacle_free_confidence
-  Bound(obstacle_free_confidence, 0, max_trajectory_confidence);
-
-  float speed_sp = fminf(oag_max_speed, 0.2f * obstacle_free_confidence);
+  // Calculate speed based directly on obstacle presence (not confidence)
+  float speed_sp = color_count < color_count_threshold ? 0.0f : oag_max_speed;
 
   switch (navigation_state){
     case SAFE:
       if (floor_count < floor_count_threshold || fabsf(floor_centroid_frac) > 0.12){
         navigation_state = OUT_OF_BOUNDS;
-      } else if (obstacle_free_confidence == 0){
+      } else if (color_count < color_count_threshold){
         navigation_state = OBSTACLE_FOUND;
       } else {
         guidance_h_set_body_vel(speed_sp, 0);
       }
-
       break;
+
     case OBSTACLE_FOUND:
       // stop
       guidance_h_set_body_vel(0, 0);
 
       // Set fixed 135-degree heading change instead of random direction
-      avoidance_heading_direction = 1.f;  // Use positive direction (could also be configurable)
+      avoidance_heading_direction = 1.f;  // Use positive direction
       
       navigation_state = SEARCH_FOR_SAFE_HEADING;
-
       break;
+
     case SEARCH_FOR_SAFE_HEADING:
       // Use fixed heading change of 135 degrees
       guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi + avoidance_heading_direction * oag_heading_change);
 
-      // make sure we have a couple of good readings before declaring the way safe
-      if (obstacle_free_confidence >= 2){
+      // Direct threshold check instead of confidence
+      if (color_count < color_count_threshold) {
+        // Still seeing obstacle, keep turning
+      } else {
+        // No obstacle detected, go back to SAFE state
         guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
         navigation_state = SAFE;
       }
       break;
+
     case OUT_OF_BOUNDS:
       // stop
       guidance_h_set_body_vel(0, 0);
@@ -220,9 +213,6 @@ void orange_avoider_guided_periodic(void)
         guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
 
         // reset safe counter
-        obstacle_free_confidence = 0;
-
-        // ensure direction is safe before continuing
         navigation_state = SAFE;
       }
       break;

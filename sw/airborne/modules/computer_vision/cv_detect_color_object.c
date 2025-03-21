@@ -297,8 +297,12 @@ uint32_t find_object_centroid(struct image_t *img, int32_t* p_xc, int32_t* p_yc,
   
   // For debugging
   if (is_camera1) {
-    VERBOSE_PRINT("Bottom camera detected %d green pixels out of %d in ROI (%d%%)\n", 
-                 cnt, (x_end-x_start)*(y_end-y_start), (int)(100.0*cnt/((x_end-x_start)*(y_end-y_start))));
+    // Only print debug message every 10 frames (reduces frequency)
+    static uint8_t debug_counter = 0;
+    if (debug_counter++ % 10 == 0) {
+      VERBOSE_PRINT("Bottom camera detected %d green pixels out of %d in ROI (%d%%)\n", 
+                   cnt, (x_end-x_start)*(y_end-y_start), (int)(100.0*cnt/((x_end-x_start)*(y_end-y_start))));
+    }
   }
   
   return cnt;
