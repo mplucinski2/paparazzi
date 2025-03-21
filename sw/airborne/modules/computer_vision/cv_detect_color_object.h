@@ -49,6 +49,24 @@ extern uint8_t cod_cr_max2;
 extern bool cod_draw1;
 extern bool cod_draw2;
 
+// Edge detection settings
+extern uint8_t cod_top_color_lum_min1;
+extern uint8_t cod_top_color_lum_max1;
+extern uint8_t cod_top_color_cb_min1;
+extern uint8_t cod_top_color_cb_max1;
+extern uint8_t cod_top_color_cr_min1;
+extern uint8_t cod_top_color_cr_max1;
+
+extern uint8_t cod_bottom_color_lum_min1;
+extern uint8_t cod_bottom_color_lum_max1;
+extern uint8_t cod_bottom_color_cb_min1;
+extern uint8_t cod_bottom_color_cb_max1;
+extern uint8_t cod_bottom_color_cr_min1;
+extern uint8_t cod_bottom_color_cr_max1;
+
+extern bool cod_edge_detection1;
+extern bool cod_edge_detection2;
+
 // ROI settings for camera 1
 extern uint16_t roi_x_min1;
 extern uint16_t roi_x_max1;

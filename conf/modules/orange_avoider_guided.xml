@@ -1,24 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE module SYSTEM "module.dtd">
 
 <module name="orange_avoider_guided" dir="orange_avoider">
   <doc>
     <description>
-      Orange (now Green) Avoider algorithm using guided mode
+      Orange Avoider for guided mode
+      Requires a color camera fixed looking forward and bottom, a color filter for the orange color and the bottom color.
     </description>
-    <define name="ORANGE_AVOIDER_VISUAL_DETECTION_ID" value="ABI_BROADCAST" description="which VISUAL_DETECTION message to recieve for obstacle detection."/>
   </doc>
   <settings>
     <dl_settings>
-      <dl_settings name="GreenAvoider">
-         <dl_setting var="oag_color_count_frac" min="0.05" step="0.01" max="1.0" shortname="green_threshold"/>
-         <dl_setting var="oag_max_speed" min="0.1" step="0.1" max="2.0" shortname="max_speed"/>
-         <dl_setting var="oag_heading_rate" min="5" step="5" max="90" shortname="heading_rate" module="orange_avoider/orange_avoider_guided" handler="SetHeadingRate"/>
-         <dl_setting var="oag_roi_width" min="0.1" step="0.1" max="1.0" shortname="roi_width"/>
-         <dl_setting var="oag_roi_height" min="0.1" step="0.1" max="1.0" shortname="roi_height"/>
+      <dl_settings NAME="OA">
+        <dl_setting var="oag_color_count_frac" min="0" step="0.01" max="0.20" module="modules/orange_avoider/orange_avoider_guided" shortname="color_count_frac" 
+        values="0.0|0.05|0.10|0.15|0.20" handler="SetColorCountFrac"/>
+        <dl_setting var="oag_heading_rate" min="0" step="1" max="60" module="modules/orange_avoider/orange_avoider_guided" shortname="heading rate"/>
       </dl_settings>
     </dl_settings>
   </settings>
-  
   <dep>
     <depends>cv_detect_color_object</depends>
   </dep>
@@ -26,8 +24,34 @@
     <file name="orange_avoider_guided.h"/>
   </header>
   <init fun="orange_avoider_guided_init()"/>
-  <periodic fun="orange_avoider_guided_periodic()" freq="30" start="FALSE" stop="FALSE" autorun="TRUE"/>
-  <makefile target="ap|nps">
+  <periodic fun="orange_avoider_guided_periodic()" freq="10.0"/>
+  <makefile>
     <file name="orange_avoider_guided.c"/>
+    <define name="ORANGE_AVOIDER_VISUAL_DETECTION_ID" value="COLOR_OBJECT_DETECTION1_ID"/>
+    <define name="COLOR_OBJECT_DETECTOR_EDGE_DETECTION1" value="TRUE"/>
+    
+    <!-- Default settings for edge detection (black/blue to green transition) -->
+    <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_LUM_MIN1" value="23"/>
+    <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_LUM_MAX1" value="90"/>
+    <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_CB_MIN1" value="110"/>
+    <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_CB_MAX1" value="185"/>
+    <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_CR_MIN1" value="60"/>
+    <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_CR_MAX1" value="140"/>
+    
+    <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_LUM_MIN1" value="60"/>
+    <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_LUM_MAX1" value="130"/>
+    <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_CB_MIN1" value="70"/>
+    <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_CB_MAX1" value="102"/>
+    <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_CR_MIN1" value="110"/>
+    <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_CR_MAX1" value="130"/>
+    
+    <!-- Region of interest for edge detection -->
+    <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="80"/>
+    <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="160"/>
+    <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="0"/>
+    <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="40"/>
+    
+    <!-- Enable drawing on the live video feed -->
+    <define name="COLOR_OBJECT_DETECTOR_DRAW1" value="TRUE"/>
   </makefile>
 </module>

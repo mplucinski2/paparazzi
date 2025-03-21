@@ -9,26 +9,11 @@
       <define name="VIDEO_CAPTURE_PATH" value="/data/ftp/internal_000/images"/>
       <define name="LOGGER_FILE_PATH" value="/data/ftp/internal_000/log"/>
       <define name="MT9V117_TARGET_FPS" value="20"/>  
-      <!-- Detect green with bottom camera (COLOR_OBJECT_DETECTION1_ID) with updated YUV values -->
-      <define name="COLOR_OBJECT_DETECTOR_LUM_MIN1" value="64"/>
-      <define name="COLOR_OBJECT_DETECTOR_LUM_MAX1" value="123"/>
-      <define name="COLOR_OBJECT_DETECTOR_CB_MIN1" value="80"/>
-      <define name="COLOR_OBJECT_DETECTOR_CB_MAX1" value="101"/>
-      <define name="COLOR_OBJECT_DETECTOR_CR_MIN1" value="118"/>
-      <define name="COLOR_OBJECT_DETECTOR_CR_MAX1" value="124"/>
     </target>
     <target name="nps" board="pc">
       <module name="fdm" type="gazebo"/>
       <define name="VIDEO_CAPTURE_PATH" value="/tmp/paparazzi/images"/>
       <define name="LOGGER_FILE_PATH" value="/tmp/paparazzi/log"/>
-      
-      <!-- Detect green with bottom camera (COLOR_OBJECT_DETECTION1_ID) with updated YUV values -->
-      <define name="COLOR_OBJECT_DETECTOR_LUM_MIN1" value="60"/>
-      <define name="COLOR_OBJECT_DETECTOR_LUM_MAX1" value="130"/>
-      <define name="COLOR_OBJECT_DETECTOR_CB_MIN1" value="70"/>
-      <define name="COLOR_OBJECT_DETECTOR_CB_MAX1" value="102"/>
-      <define name="COLOR_OBJECT_DETECTOR_CR_MIN1" value="110"/>
-      <define name="COLOR_OBJECT_DETECTOR_CR_MAX1" value="130"/>
     </target>
 
   <!-- Subsystem section -->
@@ -50,36 +35,58 @@
 
     <!-- Video/Camera modules -->
     <module name="bebop_cam"/>
-    <!--module name="bebop_ae_awb">
-      <define name="CV_AE_AWB_VERBOSE" value="0" />
-    </module-->
     <module name="video_capture">
       <define name="VIDEO_CAPTURE_CAMERA" value="front_camera"/>
       <define name="VIDEO_CAPTURE_FPS" value="10"/>
     </module>
+    
+    <!-- Add back the color detector with ROI in our specified area -->
     <module name="cv_detect_color_object">
       <define name="COLOR_OBJECT_DETECTOR_CAMERA1" value="bottom_camera"/>
       <define name="COLOR_OBJECT_DETECTOR_FPS1" value="0"/>
       <define name="COLOR_OBJECT_DETECTOR_DRAW1" value="1"/>
       <define name="COLOR_OBJECT_DETECTOR_VERBOSE1" value="1"/>
       
-      <!-- Define ROI for green detection (80x40 pixels = 3200) -->
-      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="20"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="220"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="0"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="20"/>
+      <!-- Green color detection settings for YUV -->
+      <define name="COLOR_OBJECT_DETECTOR_LUM_MIN1" value="60"/>
+      <define name="COLOR_OBJECT_DETECTOR_LUM_MAX1" value="130"/>
+      <define name="COLOR_OBJECT_DETECTOR_CB_MIN1" value="70"/>
+      <define name="COLOR_OBJECT_DETECTOR_CB_MAX1" value="102"/>
+      <define name="COLOR_OBJECT_DETECTOR_CR_MIN1" value="110"/>
+      <define name="COLOR_OBJECT_DETECTOR_CR_MAX1" value="130"/>
+      
+      <!-- Define ROI to match our edge detection area -->
+      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="100"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="140"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="100"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="240"/>
+      
+      <!-- Enable edge detection -->
+      <define name="COLOR_OBJECT_DETECTOR_EDGE_DETECTION1" value="TRUE"/>
+      
+      <!-- Edge detection settings (black/blue to green transition) -->
+      <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_LUM_MIN1" value="23"/>
+      <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_LUM_MAX1" value="90"/>
+      <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_CB_MIN1" value="110"/>
+      <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_CB_MAX1" value="185"/>
+      <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_CR_MIN1" value="60"/>
+      <define name="COLOR_OBJECT_DETECTOR_TOP_COLOR_CR_MAX1" value="140"/>
+      
+      <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_LUM_MIN1" value="60"/>
+      <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_LUM_MAX1" value="130"/>
+      <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_CB_MIN1" value="70"/>
+      <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_CB_MAX1" value="102"/>
+      <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_CR_MIN1" value="110"/>
+      <define name="COLOR_OBJECT_DETECTOR_BOTTOM_COLOR_CR_MAX1" value="130"/>
     </module>
+    
     <module name="orange_avoider_guided">
-      <define name="ORANGE_AVOIDER_VISUAL_DETECTION_ID" value="COLOR_OBJECT_DETECTION1_ID"/>
-      
-      <!-- Specific scan area size for top middle region (40x80 pixels) -->
-      <define name="OAG_FIXED_SCAN_AREA" value="4000"/>
-      
-      <!-- Threshold as percentage (value between 0.0 and 1.0) -->
-      <define name="OAG_COLOR_COUNT_FRAC" value="0.05"/>
+      <!-- Edge ratio threshold (value between 0.0 and 1.0) -->
+      <define name="OAG_EDGE_RATIO_THRESHOLD" value="0.05"/>
     </module>
+    
     <module name="video_rtp_stream">
-      <!-- Update to use bottom camera for green detection -->
+      <!-- Use bottom camera for edge detection -->
       <define name="VIEWVIDEO_CAMERA" value="bottom_camera"/>
       <define name="VIEWVIDEO_CAMERA2" value="front_camera"/>
       <define name="VIEWVIDEO_DOWNSIZE_FACTOR" value="1"/>

@@ -214,6 +214,7 @@ optical_flow_divergence_implementation.md
 building_modules_paparazzi.md
 obstacle_avoidance_changes.md
 green_avoider_modifications.md
+edge_detection_implementation.md
 # Ignore all markdown files
 *.md
 
