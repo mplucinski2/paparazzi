@@ -58,7 +58,7 @@ enum navigation_state_t {
 // define settings
 float oag_color_count_frac = 0.18f;       // obstacle detection threshold as a fraction of total of image
 float oag_floor_count_frac = 0.95f;       // floor detection threshold as a fraction of total of image
-float oag_max_speed = 0.5f;               // max flight speed [m/s]
+float oag_max_speed = 0.3f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
 
 // define and initialise global variables
@@ -74,7 +74,7 @@ float rotation_timer = 0;
 float fixed_rotation_angle = 0;
 const float BACKUP_DURATION = 2.0f;  // seconds to back up
 const float ROTATION_DURATION = 3.0f; // seconds to rotate
-const float BACKUP_SPEED = 0.7f;     // m/s backward speed
+const float BACKUP_SPEED = 0.5f;     // m/s backward speed
 const float FIXED_ROTATION_ANGLE = RadOfDeg(135.0f);  // 135 degree turn
 
 const int16_t max_trajectory_confidence = 5;  // number of consecutive negative object detections to be sure we are obstacle free
