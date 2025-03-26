@@ -140,6 +140,12 @@ struct image_t *object_detector1(struct image_t *img, uint8_t camera_id __attrib
   return object_detector(img, 1);
 }
 
+// Update roi_y_max1 based on roi_y_min1 (to maintain a symmetrical ROI)
+void update_roi_y_max(void) {
+  roi_y_max1 = 520 - roi_y_min1;
+  VERBOSE_PRINT("Updated ROI: y_min=%d, y_max=%d\n", roi_y_min1, roi_y_max1);
+}
+
 void color_object_detector_init(void)
 {
   memset(global_filters, 0, sizeof(struct color_object_t));
@@ -162,7 +168,7 @@ void color_object_detector_init(void)
   roi_x_min1 = COLOR_OBJECT_DETECTOR_ROI_X_MIN1;
   roi_x_max1 = COLOR_OBJECT_DETECTOR_ROI_X_MAX1;
   roi_y_min1 = COLOR_OBJECT_DETECTOR_ROI_Y_MIN1;
-  roi_y_max1 = COLOR_OBJECT_DETECTOR_ROI_Y_MAX1;
+  update_roi_y_max();  // Set roi_y_max1 based on roi_y_min1
   use_roi1 = true;
 #endif
 
@@ -276,4 +282,13 @@ void color_object_detector_periodic(void)
         0, 0, local_filters[0].color_count, roi_area_scaled);
     local_filters[0].updated = false;
   }
+}
+
+/**
+ * Handler function for setting ROI Y Min
+ */
+void cv_detect_color_object_SetRoiYMin(float val)
+{
+  roi_y_min1 = (uint16_t)val;
+  update_roi_y_max();
 }

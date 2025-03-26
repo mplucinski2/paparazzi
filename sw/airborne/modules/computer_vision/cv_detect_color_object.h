@@ -45,8 +45,14 @@ extern bool cod_draw1;
 extern uint16_t roi_x_min1;
 extern uint16_t roi_x_max1;
 extern uint16_t roi_y_min1;
-extern uint16_t roi_y_max1;
+extern uint16_t roi_y_max1;  // Automatically calculated as (520 - roi_y_min1)
 extern bool use_roi1;
+
+// Function to update roi_y_max1 based on roi_y_min1
+extern void update_roi_y_max(void);
+
+// Handler function for setting ROI Y Min from GCS
+extern void cv_detect_color_object_SetRoiYMin(float val);
 
 // Module functions
 extern void color_object_detector_init(void);

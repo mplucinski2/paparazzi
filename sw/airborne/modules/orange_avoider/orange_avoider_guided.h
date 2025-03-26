@@ -32,16 +32,14 @@ extern float oag_color_count_frac;  // obstacle detection threshold as a fractio
 extern float oag_max_speed;         // max flight speed [m/s]
 extern float oag_heading_rate;      // heading rate setpoint [rad/s]
 
-// Fixed scan area setting
-extern uint32_t oag_fixed_scan_area; // Fixed scan area in pixels for obstacle detection
-extern uint32_t current_roi_area;    // Actual ROI area calculated from dimensions
+// ROI area
+extern uint32_t current_roi_area;   // Actual ROI area calculated from dimensions
 
 // Confidence setting
 extern int16_t max_trajectory_confidence; // Number of consecutive negative object detections to be sure we are obstacle free
 
 // Function declarations
 extern void orange_avoider_guided_SetHeadingRate(float val);
-extern void orange_avoider_guided_SetFixedScanArea(float val);
 extern uint8_t setInitialAvoidanceDirection(void);
 
 extern void orange_avoider_guided_init(void);

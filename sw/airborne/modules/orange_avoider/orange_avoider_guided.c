@@ -39,9 +39,13 @@
 #define VERBOSE_PRINT(...)
 #endif
 
+// Define fixed scan area fallback for detection
+#define OAG_FIXED_SCAN_AREA 3200
+
 // Function declaration for turning direction determination
 void determineAvoidanceDirection(int16_t centroid_y);
 
+// define and initialise global variables
 enum navigation_state_t {
   SAFE,
   OBSTACLE_FOUND,
@@ -53,11 +57,7 @@ float oag_color_count_frac = 0.95f;       // obstacle detection threshold as a f
 float oag_max_speed = 0.5f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
 
-// Define fixed scan area for green detection (40x80=3200 pixels) as fallback
-#ifndef OAG_FIXED_SCAN_AREA
-#define OAG_FIXED_SCAN_AREA 3200
-#endif
-uint32_t oag_fixed_scan_area = OAG_FIXED_SCAN_AREA;  // Default scan area (can be changed via GCS)
+// Current calculated ROI area
 uint32_t current_roi_area = OAG_FIXED_SCAN_AREA;     // Actual area calculated from ROI
 
 // define and initialise global variables
@@ -92,7 +92,7 @@ static void color_detection_cb(uint8_t __attribute__((unused)) sender_id,
   if (extra > 0) {
     current_roi_area = (uint32_t)extra;
   } else {
-    current_roi_area = oag_fixed_scan_area;  // Use default if not provided
+    current_roi_area = OAG_FIXED_SCAN_AREA;  // Use default if not provided
   }
   
   // Debug output
@@ -109,9 +109,6 @@ void orange_avoider_guided_init(void)
   srand(time(NULL));
   // Set initial direction (will be updated based on centroid)
   avoidance_heading_direction = 1.0f;
-
-  // Initialize ROI area
-  current_roi_area = oag_fixed_scan_area;
 
   // Print ROI info for debugging
   VERBOSE_PRINT("Using initial scan area of %d pixels for green detection\n", current_roi_area);
@@ -208,16 +205,5 @@ void determineAvoidanceDirection(int16_t centroid_y)
 void orange_avoider_guided_SetHeadingRate(float val)
 {
   oag_heading_rate = RadOfDeg(val);
-}
-
-/*
- * Handler function for updating fixed scan area from GCS
- */
-void orange_avoider_guided_SetFixedScanArea(float val)
-{
-  oag_fixed_scan_area = (uint32_t)val;
-  // Also update current_roi_area as it might be used immediately
-  current_roi_area = oag_fixed_scan_area;
-  VERBOSE_PRINT("Updated fixed scan area to %d pixels\n", oag_fixed_scan_area);
 }
 
