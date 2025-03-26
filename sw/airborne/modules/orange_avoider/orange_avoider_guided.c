@@ -52,32 +52,36 @@ enum navigation_state_t {
   OUT_OF_BOUNDS,
   BACKING_UP,       // New state for backward movement
   ROTATE_FIXED,     // New state for fixed rotation
-  REENTER_ARENA
+  REENTER_ARENA,
+  EDGE_FOLLOWING    // New state
 };
 
 // define settings
 float oag_color_count_frac = 0.18f;       // obstacle detection threshold as a fraction of total of image
-float oag_floor_count_frac = 0.95f;       // floor detection threshold as a fraction of total of image
+float oag_floor_count_frac = 0.08f;       // floor detection threshold as a fraction of total of image
 float oag_max_speed = 0.3f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
 
 // define and initialise global variables
 enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;   // current state in state machine
-int32_t color_count = 0;                // orange color count from color filter for obstacle detection
-int32_t floor_count = 0;                // green color count from color filter for floor detection
-int32_t floor_centroid = 0;             // floor detector centroid in y direction (along the horizon)
+int32_t color_count = 0;                // orange color count from bottom camera for obstacle detection
+int32_t floor_count = 0;                // green color count from front camera for boundary detection
+int32_t floor_centroid = 0;             // front camera detector centroid in y direction
 float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
 int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead if safe.
 // Add global variables for timing and angle tracking
 float backward_timer = 0;
 float rotation_timer = 0;
 float fixed_rotation_angle = 0;
-const float BACKUP_DURATION = 2.0f;  // seconds to back up
+const float BACKUP_DURATION = 1.0f;  // seconds to back up
 const float ROTATION_DURATION = 3.0f; // seconds to rotate
 const float BACKUP_SPEED = 0.5f;     // m/s backward speed
-const float FIXED_ROTATION_ANGLE = RadOfDeg(135.0f);  // 135 degree turn
+const float FIXED_ROTATION_ANGLE = RadOfDeg(90.0f);  // 135 degree turn
 
 const int16_t max_trajectory_confidence = 5;  // number of consecutive negative object detections to be sure we are obstacle free
+
+// Add threshold for edge detection
+const float EDGE_CENTROID_THRESHOLD = 0.08f;  // Adjust based on testing
 
 // This call back will be used to receive the color count from the orange detector
 #ifndef ORANGE_AVOIDER_VISUAL_DETECTION_ID
@@ -133,11 +137,11 @@ void orange_avoider_guided_periodic(void)
     return;
   }
 
-  // compute current color thresholds
-  int32_t color_count_threshold = oag_color_count_frac * front_camera.output_size.w * front_camera.output_size.h;
-  // Use bottom camera dimensions for floor detection
-  int32_t floor_count_threshold = oag_floor_count_frac * bottom_camera.output_size.w * bottom_camera.output_size.h;
-  float floor_centroid_frac = floor_centroid / (float)bottom_camera.output_size.h / 2.f;
+  // compute current color thresholds - bottom camera for obstacles
+  int32_t color_count_threshold = oag_color_count_frac * bottom_camera.output_size.w * bottom_camera.output_size.h;
+  // Use front camera dimensions for floor/boundary detection
+  int32_t floor_count_threshold = oag_floor_count_frac * front_camera.output_size.w * front_camera.output_size.h;
+  float floor_centroid_frac = floor_centroid / (float)front_camera.output_size.h / 2.f;
   
   VERBOSE_PRINT("Color_count: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
   VERBOSE_PRINT("Floor count: %d, threshold: %d\n", floor_count, floor_count_threshold);
@@ -160,14 +164,18 @@ void orange_avoider_guided_periodic(void)
 
   switch (navigation_state){
     case SAFE:
-    if (floor_count < floor_count_threshold){
-      navigation_state = OUT_OF_BOUNDS;
-      } else if (obstacle_free_confidence == 0){
+      // Check for edge presence before checking for out of bounds
+      if (fabsf(floor_centroid_frac) > EDGE_CENTROID_THRESHOLD && 
+          floor_count > floor_count_threshold * 0.8) {
+        // Edge detected but still in bounds
+        navigation_state = EDGE_FOLLOWING;
+      } else if (floor_count < floor_count_threshold) {
+        navigation_state = OUT_OF_BOUNDS;
+      } else if (obstacle_free_confidence == 0) {
         navigation_state = OBSTACLE_FOUND;
       } else {
         guidance_h_set_body_vel(speed_sp, 0);
       }
-
       break;
     case OBSTACLE_FOUND:
       // stop
@@ -260,6 +268,29 @@ void orange_avoider_guided_periodic(void)
         reenter_speed = fminf(reenter_speed + 0.01f, 0.3f);
         guidance_h_set_body_vel(reenter_speed, 0);
         obstacle_free_confidence++;
+      }
+      break;
+    case EDGE_FOLLOWING:
+      {
+        // Calculate lateral velocity to stay parallel to the edge
+        // A positive centroid fraction means edge is below center
+        float lateral_velocity = -0.2f * floor_centroid_frac;
+        
+        // Move forward but with a lateral component to follow the edge
+        guidance_h_set_body_vel(speed_sp * 0.7f, lateral_velocity);
+        
+        // If we're no longer seeing an edge, return to SAFE
+        if (fabsf(floor_centroid_frac) < EDGE_CENTROID_THRESHOLD * 0.7f) {
+          navigation_state = SAFE;
+        }
+        // If we detect an obstacle, handle it
+        else if (obstacle_free_confidence == 0) {
+          navigation_state = OBSTACLE_FOUND;
+        }
+        // If we've lost too much green, we're out of bounds
+        else if (floor_count < floor_count_threshold) {
+          navigation_state = OUT_OF_BOUNDS;
+        }
       }
       break;
     default:
