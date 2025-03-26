@@ -19,7 +19,7 @@
  * speed estimate rather than a global position.
  *
  * A Region of Interest (ROI) is implemented to only process green objects in the middle part of the bottom camera image.
- * ROI dimensions can be configured in the airframe file using OAG_ROI_HEIGHT and OAG_ROI_WIDTH.
+ * ROI dimensions are configured directly in the airframe file using COLOR_OBJECT_DETECTOR_ROI_* settings.
  */
 
 #ifndef ORANGE_AVOIDER_GUIDED_H
@@ -32,17 +32,14 @@ extern float oag_color_count_frac;  // obstacle detection threshold as a fractio
 extern float oag_max_speed;         // max flight speed [m/s]
 extern float oag_heading_rate;      // heading rate setpoint [rad/s]
 
-// ROI settings - can be defined in airframe file using OAG_ROI_HEIGHT and OAG_ROI_WIDTH
-extern float oag_roi_height;        // height of the ROI as a fraction of image height (from top)
-extern float oag_roi_width;         // width of the ROI as a fraction of image width (centered)
-
 // Fixed scan area setting
 extern uint32_t oag_fixed_scan_area; // Fixed scan area in pixels for obstacle detection
 extern uint32_t current_roi_area;    // Actual ROI area calculated from dimensions
 
-// Add handler function for GCS settings
+// Function declarations
 extern void orange_avoider_guided_SetHeadingRate(float val);
 extern void orange_avoider_guided_SetFixedScanArea(float val);
+extern uint8_t setInitialAvoidanceDirection(void);
 
 extern void orange_avoider_guided_init(void);
 extern void orange_avoider_guided_periodic(void);

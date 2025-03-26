@@ -41,7 +41,8 @@
 
 // Default ROI settings if not defined in airframe file - REMOVED as not functional
 
-uint8_t chooseRandomIncrementAvoidance(void);
+// Function declaration
+uint8_t setInitialAvoidanceDirection(void);
 
 enum navigation_state_t {
   SAFE,
@@ -55,23 +56,16 @@ float oag_heading_rate = RadOfDeg(15.f);  // heading change setpoint for avoidan
 
 // Define fixed scan area for green detection (40x80=3200 pixels) as fallback
 #ifndef OAG_FIXED_SCAN_AREA
-#define OAG_FIXED_SCAN_AREA 3000
+#define OAG_FIXED_SCAN_AREA 3200
 #endif
 uint32_t oag_fixed_scan_area = OAG_FIXED_SCAN_AREA;  // Default scan area (can be changed via GCS)
 uint32_t current_roi_area = OAG_FIXED_SCAN_AREA;     // Actual area calculated from ROI
-
-// Settings required by system but not used in this module
-float __attribute__((unused)) oag_roi_width = 0.0f;    // Unused ROI width setting (required by settings system)
-float __attribute__((unused)) oag_roi_height = 0.0f;   // Unused ROI height setting (required by settings system)
 
 // define and initialise global variables
 enum navigation_state_t navigation_state = OBSTACLE_FOUND;   // current state in state machine
 int32_t color_count = 0;                // green color count from color filter for obstacle detection
 float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
-int32_t camera_pixel_count = 0;         // total number of pixels in the camera image
 int16_t last_centroid_y = 0;            // store the last y-coordinate of the centroid
-
-const int16_t max_trajectory_confidence = 1;  // number of consecutive negative object detections to be sure we are obstacle free
 
 // This call back will be used to receive the color count from the green detector
 #ifndef ORANGE_AVOIDER_VISUAL_DETECTION_ID
@@ -108,19 +102,14 @@ static void color_detection_cb(uint8_t __attribute__((unused)) sender_id,
  */
 void orange_avoider_guided_init(void)
 {
-  // Initialise random values
+  // Initialise values
   srand(time(NULL));
-  chooseRandomIncrementAvoidance();
+  setInitialAvoidanceDirection();
 
   // Initialize ROI area
   current_roi_area = oag_fixed_scan_area;
 
-  // Calculate total camera pixels for threshold calculation
-  camera_pixel_count = bottom_camera.output_size.w * bottom_camera.output_size.h;
-
-  // Print camera info and ROI info for debugging
-  VERBOSE_PRINT("Bottom camera resolution: %dx%d\n", 
-                bottom_camera.output_size.w, bottom_camera.output_size.h);
+  // Print ROI info for debugging
   VERBOSE_PRINT("Using initial scan area of %d pixels for green detection\n", current_roi_area);
 
   // bind our colorfilter callback to receive the color filter output
@@ -193,9 +182,9 @@ void orange_avoider_guided_periodic(void)
 }
 
 /*
- * Sets the heading direction for avoidance (no longer random)
+ * Sets the default heading direction for avoidance
  */
-uint8_t chooseRandomIncrementAvoidance(void)
+uint8_t setInitialAvoidanceDirection(void)
 {
   // Initial default direction is clockwise
   avoidance_heading_direction = 1.f;
