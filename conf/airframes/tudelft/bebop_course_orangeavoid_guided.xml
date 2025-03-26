@@ -64,8 +64,8 @@
       <define name="COLOR_OBJECT_DETECTOR_VERBOSE1" value="1"/>
       
       <!-- Define ROI for green detection (80x40 pixels = 3200) -->
-      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="20"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="220"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="0"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="240"/>
       <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="0"/>
       <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="20"/>
     </module>

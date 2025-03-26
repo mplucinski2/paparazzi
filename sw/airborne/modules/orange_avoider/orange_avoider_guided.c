@@ -50,8 +50,8 @@ enum navigation_state_t {
 
 // define settings
 float oag_color_count_frac = 0.99f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
-float oag_max_speed = 0.3f;               // max flight speed [m/s]
-float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
+float oag_max_speed = 0.1f;               // max flight speed [m/s]
+float oag_heading_rate = RadOfDeg(15.f);  // heading change setpoint for avoidance [rad/s]
 
 // Define fixed scan area for green detection (40x80=3200 pixels)
 #ifndef OAG_FIXED_SCAN_AREA
