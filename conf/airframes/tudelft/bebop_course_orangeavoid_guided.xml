@@ -10,19 +10,17 @@
       <define name="LOGGER_FILE_PATH" value="/data/ftp/internal_000/log"/>
       <define name="MT9V117_TARGET_FPS" value="20"/>  
       <!-- Detect green with bottom camera (COLOR_OBJECT_DETECTION1_ID) with updated YUV values -->
-      <define name="COLOR_OBJECT_DETECTOR_LUM_MIN1" value="64"/>
-      <define name="COLOR_OBJECT_DETECTOR_LUM_MAX1" value="123"/>
-      <define name="COLOR_OBJECT_DETECTOR_CB_MIN1" value="80"/>
-      <define name="COLOR_OBJECT_DETECTOR_CB_MAX1" value="101"/>
-      <define name="COLOR_OBJECT_DETECTOR_CR_MIN1" value="118"/>
-      <define name="COLOR_OBJECT_DETECTOR_CR_MAX1" value="124"/>
+      <define name="COLOR_OBJECT_DETECTOR_LUM_MIN1" value="28"/> <!-- 73 -->
+      <define name="COLOR_OBJECT_DETECTOR_LUM_MAX1" value="253"/> <!-- 249 -->
+      <define name="COLOR_OBJECT_DETECTOR_CB_MIN1" value="104"/> <!-- 108 -->
+      <define name="COLOR_OBJECT_DETECTOR_CB_MAX1" value="141"/> <!-- 141 -->
+      <define name="COLOR_OBJECT_DETECTOR_CR_MIN1" value="93"/> <!-- 105 -->
+      <define name="COLOR_OBJECT_DETECTOR_CR_MAX1" value="142"/> <!-- 140 -->
     </target>
     <target name="nps" board="pc">
       <module name="fdm" type="gazebo"/>
       <define name="VIDEO_CAPTURE_PATH" value="/tmp/paparazzi/images"/>
       <define name="LOGGER_FILE_PATH" value="/tmp/paparazzi/log"/>
-      
-      <!-- Detect green with bottom camera (COLOR_OBJECT_DETECTION1_ID) with updated YUV values -->
       <define name="COLOR_OBJECT_DETECTOR_LUM_MIN1" value="60"/>
       <define name="COLOR_OBJECT_DETECTOR_LUM_MAX1" value="130"/>
       <define name="COLOR_OBJECT_DETECTOR_CB_MIN1" value="70"/>
@@ -63,7 +61,7 @@
       <define name="COLOR_OBJECT_DETECTOR_DRAW1" value="1"/>
       <define name="COLOR_OBJECT_DETECTOR_VERBOSE1" value="1"/>
       
-      <!-- Define ROI for green detection (80x40 pixels = 3200) -->
+      <!-- Define ROI for green detection (240x20 pixels = 4800) -->
       <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="0"/>
       <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="240"/>
       <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="0"/>
@@ -73,7 +71,7 @@
       <define name="ORANGE_AVOIDER_VISUAL_DETECTION_ID" value="COLOR_OBJECT_DETECTION1_ID"/>
       
       <!-- Specific scan area size for top middle region (40x80 pixels) -->
-      <define name="OAG_FIXED_SCAN_AREA" value="4000"/>
+      <define name="OAG_FIXED_SCAN_AREA" value="4800"/>
       
       <!-- Threshold as percentage (value between 0.0 and 1.0) -->
       <define name="OAG_COLOR_COUNT_FRAC" value="0.05"/>
