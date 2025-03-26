@@ -25,6 +25,8 @@
 #ifndef ORANGE_AVOIDER_GUIDED_H
 #define ORANGE_AVOIDER_GUIDED_H
 
+#include <stdint.h> // For uint32_t type
+
 // settings
 extern float oag_color_count_frac;  // obstacle detection threshold as a fraction of total of image
 extern float oag_max_speed;         // max flight speed [m/s]
@@ -34,8 +36,13 @@ extern float oag_heading_rate;      // heading rate setpoint [rad/s]
 extern float oag_roi_height;        // height of the ROI as a fraction of image height (from top)
 extern float oag_roi_width;         // width of the ROI as a fraction of image width (centered)
 
+// Fixed scan area setting
+extern uint32_t oag_fixed_scan_area; // Fixed scan area in pixels for obstacle detection
+extern uint32_t current_roi_area;    // Actual ROI area calculated from dimensions
+
 // Add handler function for GCS settings
 extern void orange_avoider_guided_SetHeadingRate(float val);
+extern void orange_avoider_guided_SetFixedScanArea(float val);
 
 extern void orange_avoider_guided_init(void);
 extern void orange_avoider_guided_periodic(void);

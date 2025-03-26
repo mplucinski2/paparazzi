@@ -37,6 +37,11 @@
          <dl_setting var="cod_cr_min1"   min="0" step="1" max="255" shortname="v_min1"/>
          <dl_setting var="cod_cr_max1"   min="0" step="1" max="255" shortname="v_max1"/>
          <dl_setting var="cod_draw1"  min="0" step="1" max="1" values="False|True" shortname="draw 1" />
+         <dl_setting var="roi_x_min1" min="0" step="1" max="240" shortname="roi_x_min1"/>
+         <dl_setting var="roi_x_max1" min="0" step="1" max="240" shortname="roi_x_max1"/>
+         <dl_setting var="roi_y_min1" min="0" step="1" max="520" shortname="roi_y_min1"/>
+         <dl_setting var="roi_y_max1" min="0" step="1" max="520" shortname="roi_y_max1"/>
+         <dl_setting var="use_roi1" min="0" step="1" max="1" values="False|True" shortname="use_roi1"/>
          <dl_setting var="cod_lum_min2" min="0" step="1" max="255" shortname="y_min2"/>
          <dl_setting var="cod_lum_max2" min="0" step="1" max="255" shortname="y_max2"/>
          <dl_setting var="cod_cb_min2"   min="0" step="1" max="255" shortname="u_min2"/>

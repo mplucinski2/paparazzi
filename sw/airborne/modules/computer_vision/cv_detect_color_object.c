@@ -71,10 +71,10 @@ bool cod_draw1 = false;
 bool cod_draw2 = false;
 
 // ROI parameters for camera 1 (used for green detection)
-uint16_t roi_x_min1 = 80;  // Default ROI parameters (80x40 = 3200 pixels)
-uint16_t roi_x_max1 = 160;
-uint16_t roi_y_min1 = 0;
-uint16_t roi_y_max1 = 40;
+uint16_t roi_x_min1 = 0;  // Default ROI parameters (80x40 = 3200 pixels)
+uint16_t roi_x_max1 = 60;
+uint16_t roi_y_min1 = 240;
+uint16_t roi_y_max1 = 280;
 bool use_roi1 = true;      // Use ROI for camera 1 by default
 
 // define global variables
@@ -82,6 +82,7 @@ struct color_object_t {
   int32_t x_c;
   int32_t y_c;
   uint32_t color_count;
+  uint32_t roi_area;  // Store ROI area in pixels
   bool updated;
 };
 struct color_object_t global_filters[2];
@@ -129,22 +130,34 @@ static struct image_t *object_detector(struct image_t *img, uint8_t filter)
   };
 
   int32_t x_c, y_c;
+  uint32_t roi_area = 0;
 
   // Filter and find centroid
   uint32_t count = find_object_centroid(img, &x_c, &y_c, draw, lum_min, lum_max, cb_min, cb_max, cr_min, cr_max);
   
+  // Check if this is camera 1 (based on filter settings) to get ROI area
+  bool is_camera1 = (filter == 1);
+  
+  // Calculate ROI area based on dimensions
+  if (is_camera1 && use_roi1) {
+    roi_area = (roi_x_max1 - roi_x_min1) * (roi_y_max1 - roi_y_min1);
+  } else {
+    roi_area = img->w * img->h;
+  }
+  
   // Log which camera is detecting colors and how many pixels were found
   if (filter == 1) {
-    VERBOSE_PRINT("Bottom camera (1): found %d green pixels in %s\n", 
-                 count, use_roi1 ? "ROI" : "full frame");
+    VERBOSE_PRINT("Camera 1: found %d green pixels in %s (ROI area: %d pixels)\n", 
+                 count, use_roi1 ? "ROI" : "full frame", roi_area);
   } else {
-    VERBOSE_PRINT("Front camera (2): found %d floor pixels\n", count);
+    VERBOSE_PRINT("Camera 2: found %d floor pixels (area: %d pixels)\n", count, roi_area);
   }
 
   pthread_mutex_lock(&mutex);
   global_filters[filter-1].color_count = count;
   global_filters[filter-1].x_c = x_c;
   global_filters[filter-1].y_c = y_c;
+  global_filters[filter-1].roi_area = roi_area;  // Store ROI area
   global_filters[filter-1].updated = true;
   pthread_mutex_unlock(&mutex);
 
@@ -255,9 +268,12 @@ uint32_t find_object_centroid(struct image_t *img, int32_t* p_xc, int32_t* p_yc,
     x_end = roi_x_max1;
     y_start = roi_y_min1;
     y_end = roi_y_max1;
-    VERBOSE_PRINT("Using ROI for bottom camera: x=%d-%d, y=%d-%d (%d pixels total)\n", 
+    VERBOSE_PRINT("Using ROI for camera: x=%d-%d, y=%d-%d (%d pixels total)\n", 
                   x_start, x_end, y_start, y_end, (x_end-x_start)*(y_end-y_start));
   }
+
+  // Calculate ROI area
+  uint32_t roi_area = (x_end - x_start) * (y_end - y_start);
 
   // Go through the pixels in the specified region
   for (uint16_t y = y_start; y < y_end && y < img->h; y++) {
@@ -316,13 +332,17 @@ void color_object_detector_periodic(void)
   pthread_mutex_unlock(&mutex);
 
   if(local_filters[0].updated){
+    // Use the 'extra' field to send ROI area information
+    int16_t roi_area_scaled = (int16_t)(local_filters[0].roi_area > 32767 ? 32767 : local_filters[0].roi_area);
     AbiSendMsgVISUAL_DETECTION(COLOR_OBJECT_DETECTION1_ID, local_filters[0].x_c, local_filters[0].y_c,
-        0, 0, local_filters[0].color_count, 0);
+        0, 0, local_filters[0].color_count, roi_area_scaled);
     local_filters[0].updated = false;
   }
   if(local_filters[1].updated){
+    // Use the 'extra' field to send ROI area information
+    int16_t roi_area_scaled = (int16_t)(local_filters[1].roi_area > 32767 ? 32767 : local_filters[1].roi_area);
     AbiSendMsgVISUAL_DETECTION(COLOR_OBJECT_DETECTION2_ID, local_filters[1].x_c, local_filters[1].y_c,
-        0, 0, local_filters[1].color_count, 1);
+        0, 0, local_filters[1].color_count, roi_area_scaled);
     local_filters[1].updated = false;
   }
 }

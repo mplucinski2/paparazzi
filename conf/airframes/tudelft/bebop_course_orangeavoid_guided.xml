@@ -56,30 +56,30 @@
       <define name="VIDEO_CAPTURE_FPS" value="10"/>
     </module>
     <module name="cv_detect_color_object">
-      <define name="COLOR_OBJECT_DETECTOR_CAMERA1" value="bottom_camera"/>
+      <define name="COLOR_OBJECT_DETECTOR_CAMERA1" value="front_camera"/>
       <define name="COLOR_OBJECT_DETECTOR_FPS1" value="0"/>
       <define name="COLOR_OBJECT_DETECTOR_DRAW1" value="1"/>
       <define name="COLOR_OBJECT_DETECTOR_VERBOSE1" value="1"/>
       
-      <!-- Define ROI for green detection (240x20 pixels = 4800) -->
+      <!-- Define ROI for green detection (240x520 pixels) -->
       <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="0"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="240"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="0"/>
-      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="20"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="10"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="110"/>
+      <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="410"/>
     </module>
     <module name="orange_avoider_guided">
       <define name="ORANGE_AVOIDER_VISUAL_DETECTION_ID" value="COLOR_OBJECT_DETECTION1_ID"/>
       
-      <!-- Specific scan area size for top middle region (40x80 pixels) -->
-      <define name="OAG_FIXED_SCAN_AREA" value="4800"/>
+      <!-- Specific scan area size for top middle region -->
+      <define name="OAG_FIXED_SCAN_AREA" value="3000"/>
       
       <!-- Threshold as percentage (value between 0.0 and 1.0) -->
       <define name="OAG_COLOR_COUNT_FRAC" value="0.05"/>
     </module>
     <module name="video_rtp_stream">
-      <!-- Update to use bottom camera for green detection -->
-      <define name="VIEWVIDEO_CAMERA" value="bottom_camera"/>
-      <define name="VIEWVIDEO_CAMERA2" value="front_camera"/>
+      <!-- Front camera is now primary for green detection -->
+      <define name="VIEWVIDEO_CAMERA" value="front_camera"/>
+      <define name="VIEWVIDEO_CAMERA2" value="bottom_camera"/>
       <define name="VIEWVIDEO_DOWNSIZE_FACTOR" value="1"/>
       <define name="VIEWVIDEO_QUALITY_FACTOR" value="40"/>
     </module>
