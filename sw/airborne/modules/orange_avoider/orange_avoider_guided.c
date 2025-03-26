@@ -18,7 +18,7 @@
  * less dependent on a global positioning estimate as witht the navigation mode. This module can be used with a simple
  * speed estimate rather than a global position.
  *
- * A Region of Interest (ROI) is implemented to only process green objects in the middle part of the bottom camera image.
+ * A Region of Interest (ROI) is implemented to only process green objects in the middle part of the camera image.
  * ROI dimensions can be configured in the airframe file.
  */
 
@@ -39,20 +39,19 @@
 #define VERBOSE_PRINT(...)
 #endif
 
-// Default ROI settings if not defined in airframe file - REMOVED as not functional
-
-// Function declaration
-uint8_t setInitialAvoidanceDirection(void);
+// Function declaration for turning direction determination
+void determineAvoidanceDirection(int16_t centroid_y);
 
 enum navigation_state_t {
   SAFE,
-  OBSTACLE_FOUND
+  OBSTACLE_FOUND,
+  SEARCH_FOR_SAFE_HEADING
 };
 
 // define settings
 float oag_color_count_frac = 0.95f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
 float oag_max_speed = 0.5f;               // max flight speed [m/s]
-float oag_heading_rate = RadOfDeg(15.f);  // heading change setpoint for avoidance [rad/s]
+float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
 
 // Define fixed scan area for green detection (40x80=3200 pixels) as fallback
 #ifndef OAG_FIXED_SCAN_AREA
@@ -62,10 +61,14 @@ uint32_t oag_fixed_scan_area = OAG_FIXED_SCAN_AREA;  // Default scan area (can b
 uint32_t current_roi_area = OAG_FIXED_SCAN_AREA;     // Actual area calculated from ROI
 
 // define and initialise global variables
-enum navigation_state_t navigation_state = OBSTACLE_FOUND;   // current state in state machine
+enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;   // current state in state machine
 int32_t color_count = 0;                // green color count from color filter for obstacle detection
 float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
+int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead is safe
 int16_t last_centroid_y = 0;            // store the last y-coordinate of the centroid
+
+// Number of consecutive negative object detections to be sure we are obstacle free
+int16_t max_trajectory_confidence = 5;
 
 // This call back will be used to receive the color count from the green detector
 #ifndef ORANGE_AVOIDER_VISUAL_DETECTION_ID
@@ -104,7 +107,8 @@ void orange_avoider_guided_init(void)
 {
   // Initialise values
   srand(time(NULL));
-  setInitialAvoidanceDirection();
+  // Set initial direction (will be updated based on centroid)
+  avoidance_heading_direction = 1.0f;
 
   // Initialize ROI area
   current_roi_area = oag_fixed_scan_area;
@@ -121,55 +125,55 @@ void orange_avoider_guided_init(void)
  */
 void orange_avoider_guided_periodic(void)
 {
-  // Only run the mudule if we are in the correct flight mode
+  // Only run the module if we are in the correct flight mode
   if (guidance_h.mode != GUIDANCE_H_MODE_GUIDED) {
-    navigation_state = OBSTACLE_FOUND;
+    navigation_state = SEARCH_FOR_SAFE_HEADING;
+    obstacle_free_confidence = 0;
     return;
   }
 
-  // compute current color thresholds - use current ROI area for detection
+  // compute current color thresholds - use current ROI area for obstacle detection
   int32_t color_count_threshold = oag_color_count_frac * current_roi_area;
 
   VERBOSE_PRINT("Green_count: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
   VERBOSE_PRINT("ROI area: %d pixels\n", current_roi_area);
 
-  // Calculate speed based directly on obstacle presence
-  float speed_sp = color_count < color_count_threshold ? 0.0f : oag_max_speed;
+  // update our safe confidence using color threshold
+  if(color_count > color_count_threshold){
+    obstacle_free_confidence++;  // More green means safe
+  } else {
+    obstacle_free_confidence -= 2;  // Less green means obstacle detected
+  }
+
+  // bound obstacle_free_confidence
+  Bound(obstacle_free_confidence, 0, max_trajectory_confidence);
+
+  float speed_sp = fminf(oag_max_speed, 0.2f * obstacle_free_confidence);
 
   switch (navigation_state){
     case SAFE:
-      if (color_count < color_count_threshold){
-        // Obstacle detected - stop and transition to OBSTACLE_FOUND state
-        guidance_h_set_body_vel(0, 0);
+      if (obstacle_free_confidence == 0){
         navigation_state = OBSTACLE_FOUND;
-        
-        // Determine turning direction based on centroid y-coordinate
-        if (last_centroid_y >= 0) {
-          // Green detected in upper part of ROI - turn clockwise
-          avoidance_heading_direction = -1.0f;
-          VERBOSE_PRINT("Obstacle in upper ROI (y=%d), turning clockwise\n", last_centroid_y);
-        } else {
-          // Green detected in lower part of ROI - turn counter-clockwise
-          avoidance_heading_direction = 1.0f;
-          VERBOSE_PRINT("Obstacle in lower ROI (y=%d), turning counter-clockwise\n", last_centroid_y);
-        }
       } else {
-        // No obstacle - proceed forward
         guidance_h_set_body_vel(speed_sp, 0);
       }
       break;
 
     case OBSTACLE_FOUND:
-      // Stop the drone
+      // stop
       guidance_h_set_body_vel(0, 0);
-      
-      // Continue rotating in the same direction that was determined when the obstacle was first detected
-      // This prevents oscillations that could occur if we changed direction during the search
+
+      // determine avoidance direction based on centroid position
+      determineAvoidanceDirection(last_centroid_y);
+
+      navigation_state = SEARCH_FOR_SAFE_HEADING;
+      break;
+
+    case SEARCH_FOR_SAFE_HEADING:
       guidance_h_set_heading_rate(avoidance_heading_direction * oag_heading_rate);
 
-      // Check if we've found a safe heading (no obstacle detected)
-      if (color_count >= color_count_threshold) {
-        // Safe heading found - stop rotating and transition back to SAFE state
+      // make sure we have a couple of good readings before declaring the way safe
+      if (obstacle_free_confidence >= max_trajectory_confidence){
         guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
         navigation_state = SAFE;
       }
@@ -182,14 +186,20 @@ void orange_avoider_guided_periodic(void)
 }
 
 /*
- * Sets the default heading direction for avoidance
+ * Determines turning direction based on centroid position
  */
-uint8_t setInitialAvoidanceDirection(void)
+void determineAvoidanceDirection(int16_t centroid_y)
 {
-  // Initial default direction is clockwise
-  avoidance_heading_direction = 1.f;
-  VERBOSE_PRINT("Initial avoidance direction: clockwise\n");
-  return false;
+  // Determine turning direction based on centroid y-coordinate
+  if (centroid_y >= 0) {
+    // Green detected in upper part of ROI - turn clockwise
+    avoidance_heading_direction = -1.0f;
+    VERBOSE_PRINT("Obstacle in upper ROI (y=%d), turning clockwise\n", centroid_y);
+  } else {
+    // Green detected in lower part of ROI - turn counter-clockwise
+    avoidance_heading_direction = 1.0f;
+    VERBOSE_PRINT("Obstacle in lower ROI (y=%d), turning counter-clockwise\n", centroid_y);
+  }
 }
 
 /*

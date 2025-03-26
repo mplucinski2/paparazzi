@@ -15,16 +15,12 @@
     <define name="COLOR_OBJECT_DETECTOR_CR_MIN1" value="0" description="Filter 1 min red chroma"/>
     <define name="COLOR_OBJECT_DETECTOR_CR_MAX1" value="0" description="Filter 1 max red chroma"/>
     <define name="COLOR_OBJECT_DETECTOR_DRAW1" value="FALSE|TRUE" description="Whether or not to draw on image"/>
-
-    <define name="COLOR_OBJECT_DETECTOR_CAMERA2" value="front_camera|bottom_camera" description="Video device to use"/>
-    <define name="COLOR_OBJECT_DETECTOR_FPS2" value="0" description="Desired FPS (0: camera rate)"/>
-    <define name="COLOR_OBJECT_DETECTOR_LUM_MIN2" value="0" description="Filter 1 min luminance"/>
-    <define name="COLOR_OBJECT_DETECTOR_LUM_MAX2" value="0" description="Filter 2 max luminance"/>
-    <define name="COLOR_OBJECT_DETECTOR_CB_MIN2" value="0" description="Filter 2 min blue chroma"/>
-    <define name="COLOR_OBJECT_DETECTOR_CB_MAX2" value="0" description="Filter 2 max blue chroma"/>
-    <define name="COLOR_OBJECT_DETECTOR_CR_MIN2" value="0" description="Filter 2 min red chroma"/>
-    <define name="COLOR_OBJECT_DETECTOR_CR_MAX2" value="0" description="Filter 2 max red chroma"/>
-    <define name="COLOR_OBJECT_DETECTOR_DRAW2" value="FALSE|TRUE" description="Whether or not to draw on image"/>
+    
+    <!-- ROI settings for limiting detection area -->
+    <define name="COLOR_OBJECT_DETECTOR_ROI_X_MIN1" value="0" description="Minimum X coordinate for ROI"/>
+    <define name="COLOR_OBJECT_DETECTOR_ROI_X_MAX1" value="240" description="Maximum X coordinate for ROI"/>
+    <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MIN1" value="0" description="Minimum Y coordinate for ROI"/>
+    <define name="COLOR_OBJECT_DETECTOR_ROI_Y_MAX1" value="520" description="Maximum Y coordinate for ROI"/>
   </doc>
 
   <settings>
@@ -42,13 +38,6 @@
          <dl_setting var="roi_y_min1" min="0" step="1" max="520" shortname="roi_y_min1"/>
          <dl_setting var="roi_y_max1" min="0" step="1" max="520" shortname="roi_y_max1"/>
          <dl_setting var="use_roi1" min="0" step="1" max="1" values="False|True" shortname="use_roi1"/>
-         <dl_setting var="cod_lum_min2" min="0" step="1" max="255" shortname="y_min2"/>
-         <dl_setting var="cod_lum_max2" min="0" step="1" max="255" shortname="y_max2"/>
-         <dl_setting var="cod_cb_min2"   min="0" step="1" max="255" shortname="u_min2"/>
-         <dl_setting var="cod_cb_max2"   min="0" step="1" max="255" shortname="u_max2"/>
-         <dl_setting var="cod_cr_min2"   min="0" step="1" max="255" shortname="v_min2"/>
-         <dl_setting var="cod_cr_max2"   min="0" step="1" max="255" shortname="v_max2"/>
-         <dl_setting var="cod_draw2"  min="0" step="1" max="1" values="False|True" shortname="draw 2" />
       </dl_settings>
     </dl_settings>
   </settings>
