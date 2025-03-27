@@ -53,8 +53,8 @@ enum navigation_state_t {
 };
 
 // define settings
-float oag_color_count_frac = 0.95f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
-float oag_max_speed = 0.5f;               // max flight speed [m/s]
+float oag_color_count_frac = 0.78f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
+float oag_max_speed = 0.4f;               // max flight speed [m/s]
 float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
 
 // Current calculated ROI area
