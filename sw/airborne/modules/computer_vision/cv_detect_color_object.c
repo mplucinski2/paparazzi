@@ -25,7 +25,6 @@
  * if you are over the defined object or not
  */
 
-// Own header
 #include "modules/computer_vision/cv_detect_color_object.h"
 #include "modules/computer_vision/cv.h"
 #include "modules/core/abi.h"
@@ -62,24 +61,22 @@ uint8_t cod_cr_max1 = 0;
 
 bool cod_draw1 = false;
 
-// ROI parameters for camera 1 (front camera for green detection)
-uint16_t roi_x_min1 = 0;  // Default ROI parameters
+//region of interest limits
+uint16_t roi_x_min1 = 0; 
 uint16_t roi_x_max1 = 60;
 uint16_t roi_y_min1 = 240;
 uint16_t roi_y_max1 = 280;
-bool use_roi1 = true;      // Use ROI for camera 1 by default
+bool use_roi1 = true;
 
-// define global variables
 struct color_object_t {
   int32_t x_c;
   int32_t y_c;
   uint32_t color_count;
-  uint32_t roi_area;  // Store ROI area in pixels
+  uint32_t roi_area;  //region of interest area
   bool updated;
 };
-struct color_object_t global_filters[1]; // Only one camera used
+struct color_object_t global_filters[1]; 
 
-// Function
 uint32_t find_object_centroid(struct image_t *img, int32_t* p_xc, int32_t* p_yc, bool draw,
                               uint8_t lum_min, uint8_t lum_max,
                               uint8_t cb_min, uint8_t cb_max,
@@ -97,7 +94,6 @@ static struct image_t *object_detector(struct image_t *img, uint8_t __attribute_
   uint8_t cr_min, cr_max;
   bool draw;
 
-  // Only camera1/filter1 is used
   lum_min = cod_lum_min1;
   lum_max = cod_lum_max1;
   cb_min = cod_cb_min1;
@@ -109,25 +105,24 @@ static struct image_t *object_detector(struct image_t *img, uint8_t __attribute_
   int32_t x_c, y_c;
   uint32_t roi_area = 0;
 
-  // Filter and find centroid
   uint32_t count = find_object_centroid(img, &x_c, &y_c, draw, lum_min, lum_max, cb_min, cb_max, cr_min, cr_max);
   
-  // Calculate ROI area based on dimensions
+  //total number of pixels in the region of interest
   if (use_roi1) {
     roi_area = (roi_x_max1 - roi_x_min1) * (roi_y_max1 - roi_y_min1);
   } else {
     roi_area = img->w * img->h;
   }
   
-  // Log which camera is detecting colors and how many pixels were found
-  VERBOSE_PRINT("Front camera: found %d green pixels in %s (ROI area: %d pixels)\n", 
+  //print to verify the fraction of green pixels and the total number of pixels in the region of interest
+  VERBOSE_PRINT("found %d green pixels in %s (ROI area: %d pixels)\n", 
                count, use_roi1 ? "ROI" : "full frame", roi_area);
 
   pthread_mutex_lock(&mutex);
   global_filters[0].color_count = count;
   global_filters[0].x_c = x_c;
   global_filters[0].y_c = y_c;
-  global_filters[0].roi_area = roi_area;  // Store ROI area
+  global_filters[0].roi_area = roi_area; 
   global_filters[0].updated = true;
   pthread_mutex_unlock(&mutex);
 
@@ -140,10 +135,10 @@ struct image_t *object_detector1(struct image_t *img, uint8_t camera_id __attrib
   return object_detector(img, 1);
 }
 
-// Update roi_y_max1 based on roi_y_min1 (to maintain a symmetrical ROI)
+//region of interest is symmetrical about the vertical axis, y_max is just a function of y_min
 void update_roi_y_max(void) {
   roi_y_max1 = 520 - roi_y_min1;
-  VERBOSE_PRINT("Updated ROI: y_min=%d, y_max=%d\n", roi_y_min1, roi_y_max1);
+  VERBOSE_PRINT("opdated ROI coords: y_min=%d, y_max=%d\n", roi_y_min1, roi_y_max1);
 }
 
 void color_object_detector_init(void)
@@ -163,12 +158,12 @@ void color_object_detector_init(void)
   cod_draw1 = COLOR_OBJECT_DETECTOR_DRAW1;
 #endif
 
-  // Initialize ROI parameters from defines if available
+  //initializing roi boundaries from defines in the xml
 #ifdef COLOR_OBJECT_DETECTOR_ROI_X_MIN1
   roi_x_min1 = COLOR_OBJECT_DETECTOR_ROI_X_MIN1;
   roi_x_max1 = COLOR_OBJECT_DETECTOR_ROI_X_MAX1;
   roi_y_min1 = COLOR_OBJECT_DETECTOR_ROI_Y_MIN1;
-  update_roi_y_max();  // Set roi_y_max1 based on roi_y_min1
+  update_roi_y_max();  
   use_roi1 = true;
 #endif
 
@@ -179,9 +174,9 @@ void color_object_detector_init(void)
 /*
  * find_object_centroid
  *
- * Finds the centroid of pixels in an image within filter bounds.
- * Also returns the amount of pixels that satisfy these filter bounds.
- * Uses front camera with ROI for detection.
+ * finds the centroid of pixels in an image within roi bounds.
+ * Also returns the amount of pixels that satisfy these filter yuv thresholds.
+ * Uses front camera with roi for detection.
  *
  * @param img - input image to process formatted as YUV422.
  * @param p_xc - x coordinate of the centroid of color object
@@ -205,34 +200,34 @@ uint32_t find_object_centroid(struct image_t *img, int32_t* p_xc, int32_t* p_yc,
   uint32_t tot_y = 0;
   uint8_t *buffer = img->buf;
   
-  // Set scan region - either full frame or ROI
+  //setting the region of interest
   uint16_t x_start = 0;
   uint16_t x_end = img->w;
   uint16_t y_start = 0;
   uint16_t y_end = img->h;
   
-  // Apply ROI if enabled
+  //applying roi if roi is set to true
   if (use_roi1) {
     x_start = roi_x_min1;
     x_end = roi_x_max1;
     y_start = roi_y_min1;
     y_end = roi_y_max1;
-    VERBOSE_PRINT("Using ROI for camera: x=%d-%d, y=%d-%d (%d pixels total)\n", 
+    VERBOSE_PRINT("using roifor camera: x=%d-%d, y=%d-%d (%d pixels total)\n", 
                   x_start, x_end, y_start, y_end, (x_end-x_start)*(y_end-y_start));
   }
 
-  // Go through the pixels in the specified region
+  //only looping for pixels in the region of interest
   for (uint16_t y = y_start; y < y_end && y < img->h; y++) {
     for (uint16_t x = x_start; x < x_end && x < img->w; x ++) {
-      // Check if the color is inside the specified values
+      //checking if color fits in the specified bounds
       uint8_t *yp, *up, *vp;
       if (x % 2 == 0) {
-        // Even x
+        //even width x
         up = &buffer[y * 2 * img->w + 2 * x];      // U
         yp = &buffer[y * 2 * img->w + 2 * x + 1];  // Y1
         vp = &buffer[y * 2 * img->w + 2 * x + 2];  // V
       } else {
-        // Uneven x
+        //uneven width x
         up = &buffer[y * 2 * img->w + 2 * x - 2];  // U
         vp = &buffer[y * 2 * img->w + 2 * x];      // V
         yp = &buffer[y * 2 * img->w + 2 * x + 1];  // Y2
@@ -244,10 +239,10 @@ uint32_t find_object_centroid(struct image_t *img, int32_t* p_xc, int32_t* p_yc,
         tot_x += x;
         tot_y += y;
         if (draw){
-          *yp = 255;  // make pixel brighter in image
-        }
+          *yp = 255;  
       }
     }
+  }
   }
   if (cnt > 0) {
     *p_xc = (int32_t)roundf(tot_x / ((float) cnt) - img->w * 0.5f);
@@ -257,11 +252,10 @@ uint32_t find_object_centroid(struct image_t *img, int32_t* p_xc, int32_t* p_yc,
     *p_yc = 0;
   }
   
-  // For debugging
-  // Only print debug message every 50 frames (reduces frequency)
+  //printing debug message
   static uint8_t debug_counter = 0;
   if (debug_counter++ % 50 == 0) {
-    VERBOSE_PRINT("Front camera detected %d green pixels out of %d in ROI (%d%%)\n", 
+    VERBOSE_PRINT("Detected %d green pixels out of %d in ROI (%d%%)\n", 
                  cnt, (x_end-x_start)*(y_end-y_start), (int)(100.0*cnt/((x_end-x_start)*(y_end-y_start))));
   }
   
@@ -276,7 +270,7 @@ void color_object_detector_periodic(void)
   pthread_mutex_unlock(&mutex);
 
   if(local_filters[0].updated){
-    // Use the 'extra' field to send ROI area information
+    //using extra field to send roi info
     int16_t roi_area_scaled = (int16_t)(local_filters[0].roi_area > 32767 ? 32767 : local_filters[0].roi_area);
     AbiSendMsgVISUAL_DETECTION(COLOR_OBJECT_DETECTION1_ID, local_filters[0].x_c, local_filters[0].y_c,
         0, 0, local_filters[0].color_count, roi_area_scaled);
@@ -285,7 +279,7 @@ void color_object_detector_periodic(void)
 }
 
 /**
- * Handler function for setting ROI Y Min
+ *handler function for setting ROI Y Min
  */
 void cv_detect_color_object_SetRoiYMin(float val)
 {

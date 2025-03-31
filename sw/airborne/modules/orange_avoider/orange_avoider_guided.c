@@ -6,20 +6,14 @@
  */
 /**
  * @file "modules/orange_avoider/orange_avoider_guided.c"
- * @author Kirk Scheper
- * This module is an example module for the course AE4317 Autonomous Flight of Micro Air Vehicles at the TU Delft.
- * This module is used in combination with a color filter (cv_detect_color_object) and the guided mode of the autopilot.
- * The avoidance strategy is to simply count the total number of green pixels in the ROI. When above a certain percentage threshold,
- * (given by color_count_frac) we assume that there is an obstacle and we turn.
- *
- * The color filter settings are set using the cv_detect_color_object. This module can run multiple filters simultaneously
- * so you have to define which filter to use with the ORANGE_AVOIDER_VISUAL_DETECTION_ID setting.
- * This module differs from the simpler orange_avoider.xml in that this is flown in guided mode. This flight mode is
- * less dependent on a global positioning estimate as witht the navigation mode. This module can be used with a simple
- * speed estimate rather than a global position.
- *
- * A Region of Interest (ROI) is implemented to only process green objects in the middle part of the camera image.
- * ROI dimensions can be configured in the airframe file.
+ * @author Kirk Scheper, Miłosz Pluciński (modification)
+ * the code is a modification of the original orange_avoider_guided.c. It detects the green pixels in a cropped rectangle (region of interest) at the bottom of the front camera image,
+ * it detects obstacle if the number of green (floor) pixels is below a chosen threshold (percentage). There is no need to distinguish floor and obstacles, both are detected with this logic (optitrack not used for out of bounds)
+ * The cv_color_detection module was modified to use the region of interest parameters, and apart from that the same module is used as for the original avoider. 
+ * Finally, now the centroid  functionality of the original module is used to determine if the centroid of the green pixels is on the left or right side of the image, making it possible to determine
+ * if the obstacle is on the left or right side of the drone, which helps to more efficiently determine the direction of rotation when looking for safe heading (the direction is chosen once, when obstacle is detected
+ * when the drone is turning the direction of rotation is kept constant to avoid oscillation. y coordinate is used, as the front camera feed is rotated 90 degrees.
+ * overall this approach works if the obstacle is not floating in the air, and if the obstacle does not have exactly the same color as the floor.
  */
 
 #include "modules/orange_avoider/orange_avoider_guided.h"
@@ -39,38 +33,38 @@
 #define VERBOSE_PRINT(...)
 #endif
 
-// Define fixed scan area fallback for detection
+//fallback total number of pixels in the region of interest (roi)
 #define OAG_FIXED_SCAN_AREA 3200
 
-// Function declaration for turning direction determination
+//function declaration for determining the ccw or cw rotation when seeing an obstacle
 void determineAvoidanceDirection(int16_t centroid_y);
 
-// define and initialise global variables
+//defining global variables
 enum navigation_state_t {
   SAFE,
   OBSTACLE_FOUND,
   SEARCH_FOR_SAFE_HEADING
 };
 
-// define settings
-float oag_color_count_frac = 0.78f;       // obstacle detection threshold as a fraction of total of ROI (2% green required)
-float oag_max_speed = 0.4f;               // max flight speed [m/s]
-float oag_heading_rate = RadOfDeg(20.f);  // heading change setpoint for avoidance [rad/s]
+//defining settngs
+float oag_color_count_frac = 0.78f;       //threshold (if the fraction of green pixels is below this value, it is treated as obstacle detection)
+float oag_max_speed = 0.4f;               //maximum flight speed in m/s
+float oag_heading_rate = RadOfDeg(20.f);  //heading rate
 
-// Current calculated ROI area
-uint32_t current_roi_area = OAG_FIXED_SCAN_AREA;     // Actual area calculated from ROI
+//current roi area
+uint32_t current_roi_area = OAG_FIXED_SCAN_AREA;  
 
-// define and initialise global variables
-enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;   // current state in state machine
-int32_t color_count = 0;                // green color count from color filter for obstacle detection
-float avoidance_heading_direction = 0;  // heading change direction for avoidance [rad/s]
-int16_t obstacle_free_confidence = 0;   // a measure of how certain we are that the way ahead is safe
-int16_t last_centroid_y = 0;            // store the last y-coordinate of the centroid
+//defining and initialising global variables
+enum navigation_state_t navigation_state = SEARCH_FOR_SAFE_HEADING;   //current state
+int32_t color_count = 0;                //number of green pixels in the roi
+float avoidance_heading_direction = 0;  //direction of rotations (ccw or cw in {-1, 1})
+int16_t obstacle_free_confidence = 0;   //the same measure as used in the original file
+int16_t last_centroid_y = 0;            //y coordinate of the centroid of the green pixels upon last obstacle detection
 
-// Number of consecutive negative object detections to be sure we are obstacle free
+//how many "obstacle free" readings are needed to make sure that the heading is safe
 int16_t max_trajectory_confidence = 5;
 
-// This call back will be used to receive the color count from the green detector
+//callback to receive the color count from the cv_Color_detection
 #ifndef ORANGE_AVOIDER_VISUAL_DETECTION_ID
 #error This module requires a color filter, please define ORANGE_AVOIDER_VISUAL_DETECTION_ID to the obstacle filter
 #error Please define ORANGE_AVOIDER_VISUAL_DETECTION_ID to be COLOR_OBJECT_DETECTION1_ID or COLOR_OBJECT_DETECTION2_ID in your airframe
@@ -81,68 +75,67 @@ static void color_detection_cb(uint8_t __attribute__((unused)) sender_id,
                                int16_t __attribute__((unused)) pixel_width, int16_t __attribute__((unused)) pixel_height,
                                int32_t quality, int16_t extra)
 {
-  // The color detector module already applied ROI filtering
-  // so we can directly use the detection results
+  //the module already utilizes roi, the number of green pixels directly taken from the module
   color_count = quality;
   
-  // Store the centroid y-coordinate for direction decision
+  //used for the direction of rotation estimation
   last_centroid_y = pixel_y;
   
-  // Extract ROI area from extra field (if provided)
+  //using roi area if provided, otherwise using a fallback fixed value
   if (extra > 0) {
     current_roi_area = (uint32_t)extra;
   } else {
-    current_roi_area = OAG_FIXED_SCAN_AREA;  // Use default if not provided
+    current_roi_area = OAG_FIXED_SCAN_AREA; 
   }
   
-  // Debug output
-  VERBOSE_PRINT("Green detected: quality=%d, pos=(%d,%d), ROI area=%d\n", 
+  //debugging print
+  VERBOSE_PRINT("green detected: quality=%d, pos=(%d,%d), ROI area=%d\n", 
                 quality, pixel_x, pixel_y, current_roi_area);
 }
 
 /*
- * Initialisation function
+ *init function
  */
 void orange_avoider_guided_init(void)
 {
   // Initialise values
   srand(time(NULL));
-  // Set initial direction (will be updated based on centroid)
+  //initial rotation direction when changing heading (is determined after)
   avoidance_heading_direction = 1.0f;
 
-  // Print ROI info for debugging
-  VERBOSE_PRINT("Using initial scan area of %d pixels for green detection\n", current_roi_area);
+  //printing roi info for debugging
+  VERBOSE_PRINT("using initial scan area of %d pixels for green detection\n", current_roi_area);
 
-  // bind our colorfilter callback to receive the color filter output
+  //receiving the color count from the cv_color_detection
   AbiBindMsgVISUAL_DETECTION(ORANGE_AVOIDER_VISUAL_DETECTION_ID, &color_detection_ev, color_detection_cb);
 }
 
 /*
- * Function that checks it is safe to move forwards, and then sets a forward velocity setpoint or changes the heading
+ *functions checking if it is safe to move forwards, analogous to the original orange avoider
  */
 void orange_avoider_guided_periodic(void)
 {
-  // Only run the module if we are in the correct flight mode
+  //only running the function if we are in guided mode
   if (guidance_h.mode != GUIDANCE_H_MODE_GUIDED) {
     navigation_state = SEARCH_FOR_SAFE_HEADING;
     obstacle_free_confidence = 0;
     return;
   }
 
-  // compute current color thresholds - use current ROI area for obstacle detection
+  //current number of green pixels threshold, calculated as a fraction times the total number of pixels in the region of interest
   int32_t color_count_threshold = oag_color_count_frac * current_roi_area;
 
-  VERBOSE_PRINT("Green_count: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
-  VERBOSE_PRINT("ROI area: %d pixels\n", current_roi_area);
+  VERBOSE_PRINT("number of green pixels: %d  threshold: %d state: %d \n", color_count, color_count_threshold, navigation_state);
+  VERBOSE_PRINT("region of interest area: %d pixels\n", current_roi_area);
 
   // update our safe confidence using color threshold
   if(color_count > color_count_threshold){
-    obstacle_free_confidence++;  // More green means safe
+    obstacle_free_confidence++;  //number of green pixels above threshold, no obstacles
   } else {
-    obstacle_free_confidence -= 2;  // Less green means obstacle detected
+    obstacle_free_confidence -= 2;  //too few green pixels detected, obstacle detected (at least 3 detections are needed (done because of noise in real flight) for the current max obbstacle_free_confidence of 5)
   }
 
-  // bound obstacle_free_confidence
+  //obstacle free confidence, defined as in the original orange avoider
   Bound(obstacle_free_confidence, 0, max_trajectory_confidence);
 
   float speed_sp = fminf(oag_max_speed, 0.2f * obstacle_free_confidence);
@@ -157,10 +150,10 @@ void orange_avoider_guided_periodic(void)
       break;
 
     case OBSTACLE_FOUND:
-      // stop
+      //stop
       guidance_h_set_body_vel(0, 0);
 
-      // determine avoidance direction based on centroid position
+      //determing rotation direction
       determineAvoidanceDirection(last_centroid_y);
 
       navigation_state = SEARCH_FOR_SAFE_HEADING;
@@ -169,7 +162,7 @@ void orange_avoider_guided_periodic(void)
     case SEARCH_FOR_SAFE_HEADING:
       guidance_h_set_heading_rate(avoidance_heading_direction * oag_heading_rate);
 
-      // make sure we have a couple of good readings before declaring the way safe
+      //making sure that a few detections are "safe" before moving in a given heading
       if (obstacle_free_confidence >= max_trajectory_confidence){
         guidance_h_set_heading(stateGetNedToBodyEulers_f()->psi);
         navigation_state = SAFE;
@@ -183,24 +176,25 @@ void orange_avoider_guided_periodic(void)
 }
 
 /*
- * Determines turning direction based on centroid position
+ *determing the direction of rotation based on the centroid of the green pixels
  */
 void determineAvoidanceDirection(int16_t centroid_y)
 {
-  // Determine turning direction based on centroid y-coordinate
+  //using centroid of the green pixels to determine if the obstacle is on the left or right, then turning in the opposite direction, the direction is determined once when obstacle is detected
+  //it is not changed when turning to avoid oscillations
   if (centroid_y >= 0) {
-    // Green detected in upper part of ROI - turn clockwise
+    //centroid of the green pixels is on the right > obstacle on the left > turning clockwise
     avoidance_heading_direction = -1.0f;
-    VERBOSE_PRINT("Obstacle in upper ROI (y=%d), turning clockwise\n", centroid_y);
+    VERBOSE_PRINT("obstacle in upper ROI (y=%d), turning clockwise\n", centroid_y);
   } else {
-    // Green detected in lower part of ROI - turn counter-clockwise
+    //green centroid on the left > obstacle on the right > turning counter-clockwise
     avoidance_heading_direction = 1.0f;
-    VERBOSE_PRINT("Obstacle in lower ROI (y=%d), turning counter-clockwise\n", centroid_y);
+    VERBOSE_PRINT("obstacle in lower ROI (y=%d), turning counter-clockwise\n", centroid_y);
   }
 }
 
 /*
- * Handler function for updating heading rate from GCS
+ * handler function for updating the heading rate in the gcs
  */
 void orange_avoider_guided_SetHeadingRate(float val)
 {

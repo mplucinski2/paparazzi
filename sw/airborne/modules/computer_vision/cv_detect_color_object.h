@@ -31,7 +31,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Module settings for front camera (camera1)
+//yuv thresholds
 extern uint8_t cod_lum_min1;
 extern uint8_t cod_lum_max1;
 extern uint8_t cod_cb_min1;
@@ -40,21 +40,20 @@ extern uint8_t cod_cr_min1;
 extern uint8_t cod_cr_max1;
 
 extern bool cod_draw1;
-
-// ROI settings for front camera
+//roi settings
 extern uint16_t roi_x_min1;
 extern uint16_t roi_x_max1;
 extern uint16_t roi_y_min1;
-extern uint16_t roi_y_max1;  // Automatically calculated as (520 - roi_y_min1)
+extern uint16_t roi_y_max1;  //autocalculated as 520-roi_y_min1 for symmetry
 extern bool use_roi1;
 
-// Function to update roi_y_max1 based on roi_y_min1
+//updating roi_y_max1
 extern void update_roi_y_max(void);
 
-// Handler function for setting ROI Y Min from GCS
+//handler function for setting roi from gcs
 extern void cv_detect_color_object_SetRoiYMin(float val);
 
-// Module functions
+//functions in the module
 extern void color_object_detector_init(void);
 extern void color_object_detector_periodic(void);
 
